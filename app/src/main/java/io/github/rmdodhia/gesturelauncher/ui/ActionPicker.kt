@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,9 +46,14 @@ import io.github.rmdodhia.gesturelauncher.core.Action
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
+import io.github.rmdodhia.gesturelauncher.core.HomeControl
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
+import io.github.rmdodhia.gesturelauncher.home.HomeGateway
+import kotlinx.coroutines.launch
 
-private enum class ActionType(val title: String) { APP("App"), KINDLE("Kindle book"), PLAY("Play Books"), LINK("Libby / link") }
+private enum class ActionType(val title: String) {
+    APP("App"), HOME("Google Home"), KINDLE("Kindle book"), PLAY("Play Books"), LINK("Libby / link"),
+}
 
 private val linkTargets = listOf(
     null to "Any app",
@@ -61,12 +67,14 @@ private val linkTargets = listOf(
 fun ActionPicker(
     current: Action?,
     runner: ActionRunner,
+    home: HomeGateway,
     loadApps: suspend () -> List<AppInfo>,
     onPick: (Action) -> Unit,
     onCancel: () -> Unit,
 ) {
     val initialType = when {
         current is LaunchApp -> ActionType.APP
+        current is HomeControl -> ActionType.HOME
         current is OpenUri && current.uri.startsWith("kindle://") -> ActionType.KINDLE
         current is OpenUri && current.packageName == Links.PLAY_BOOKS_PACKAGE -> ActionType.PLAY
         current is OpenUri -> ActionType.LINK
@@ -81,12 +89,13 @@ fun ActionPicker(
                 ActionType.KINDLE -> openUri?.uri?.let { Links.extractAsin(it) } ?: ""
                 ActionType.PLAY -> openUri?.uri?.let { Links.extractPlayBooksId(it) } ?: ""
                 ActionType.LINK -> openUri?.uri ?: ""
-                ActionType.APP -> ""
+                ActionType.APP, ActionType.HOME -> ""
             },
         )
     }
     var linkPackage by remember { mutableStateOf(openUri?.packageName) }
     var testResult by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     BackHandler(onBack = onCancel)
 
@@ -122,6 +131,10 @@ fun ActionPicker(
             }
             if (type == ActionType.APP) {
                 AppList(loadApps) { onPick(LaunchApp(it.packageName, it.label)) }
+                return@Column
+            }
+            if (type == ActionType.HOME) {
+                HomePanel(home, runner, current as? HomeControl, onPick)
                 return@Column
             }
 
@@ -177,7 +190,11 @@ fun ActionPicker(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(
                         enabled = action != null,
-                        onClick = { testResult = action?.let { runner.run(it) } ?: "Opened — check it went to the right place." },
+                        onClick = {
+                            val a = action ?: return@OutlinedButton
+                            testResult = null
+                            scope.launch { testResult = runner.run(a) ?: "Opened — check it went to the right place." }
+                        },
                     ) { Text("Test") }
                     Button(
                         enabled = action != null,

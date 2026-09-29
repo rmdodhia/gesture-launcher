@@ -41,6 +41,27 @@ data class OpenUri(
     override val label: String,
 ) : Action
 
+enum class HomeCommand(val verb: String) { ON("on"), OFF("off"), TOGGLE("toggle"), BRIGHTNESS("brightness") }
+
+/** Controls a Google Home device (light, plug, …) via the Home APIs. [percent] is used for BRIGHTNESS. */
+@Serializable
+@SerialName("home")
+data class HomeControl(
+    val deviceId: String,
+    val deviceName: String,
+    val command: HomeCommand,
+    val percent: Int = 100,
+    override val label: String = defaultLabel(deviceName, command, percent),
+) : Action {
+    companion object {
+        fun defaultLabel(deviceName: String, command: HomeCommand, percent: Int): String =
+            if (command == HomeCommand.BRIGHTNESS) "$deviceName: ${percent.coerceIn(1, 100)}%" else "$deviceName: ${command.verb}"
+
+        /** Matter LevelControl for lights uses 1..254; map 1..100 % onto it. */
+        fun levelFor(percent: Int): Int = ((percent.coerceIn(1, 100) * 254 + 50) / 100).coerceIn(1, 254)
+    }
+}
+
 @Serializable
 data class Gesture(
     val id: String,

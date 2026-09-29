@@ -1,8 +1,8 @@
 # Gesture Launcher
 
-Draw a shape, tap with several fingers, swipe, or tap a rhythm on a full-screen canvas, and the phone opens an app or a specific book. You record your own gestures.
+Draw a shape, tap with several fingers, swipe, or tap a rhythm on a full-screen canvas, and the phone opens an app or a specific book, or switches/dims a Google Home device. You record your own gestures.
 
-See [PLAN.md](PLAN.md) for the design and roadmap. Google Home control is deferred to v2.
+See [PLAN.md](PLAN.md) for the design and roadmap. Google Home control needs a one-time setup: see [Google Home setup](#google-home-setup).
 
 ## Build & install (Android Studio on Windows → Galaxy S25+)
 
@@ -35,6 +35,7 @@ Command line equivalents (from the project root):
 2. Name it, then draw it **3–5 times** in the box, the way you'll normally do it. Each drawing shows up as a thumbnail with a summary (e.g. "3-finger tap" or "1 finger · 2 strokes"). Tap ✕ to drop a bad one. All samples must be the same kind of gesture (e.g. all 3-finger taps). If one isn't, it's rejected with an explanation.
 3. Tap **Choose** to pick an action:
    - **App** opens any installed app.
+   - **Google Home** switches a light/plug on, off, toggles it, or sets brightness (needs [Google Home setup](#google-home-setup)).
    - **Kindle book** takes an ASIN (the `B0…` ID in the book's Amazon URL) or a pasted Amazon link, and opens it with `kindle://book?action=open&asin=…`.
    - **Play Books** takes a volume ID or a Play Store book link.
    - **Libby / link** takes any link, optionally forced to open in Libby, Kindle or Play Books.
@@ -56,6 +57,27 @@ Command line equivalents (from the project root):
 - **End-of-gesture pause**: see above.
 - **Show match scores**: shows the score and the closest gesture after each attempt. Useful for tuning.
 
+## Google Home setup
+
+Controls any light or plug that works in the Google Home app, including ones linked from other brands' apps ("cloud-to-cloud"); no Nest hub needed for those. It uses Google's **Home APIs**, which have two hurdles: the SDK isn't on a public Maven repo (you download it after signing in), and Google only lets the app talk to your home after an OAuth setup in Google Cloud. Without the SDK the app builds and works normally, and the Google Home tab just explains what's missing.
+
+Do this once, on the machine you build on:
+
+1. **Download the SDK.** Sign in at <https://developers.home.google.com/apis/android/sdk> and download the Android SDK. Unzip it so you have a Maven folder tree `com/google/android/gms/play-services-home/<version>/…` and put that tree either in the project as `home-sdk/` (git-ignored) or in `~/.m2/repository/` (on Windows `%USERPROFILE%\.m2\repository\`).
+2. **Turn it on.** In `gradle.properties` uncomment `homeSdk=` and set it to the `<version>` folder name (e.g. `homeSdk=17.1.0`). Sync/rebuild. If the build then fails with a Kotlin "incompatible metadata" error, raise `kotlin` in `gradle/libs.versions.toml` to the version Google's sample app uses.
+3. **Google Cloud project + OAuth consent screen.** In <https://console.cloud.google.com>, create a project → *APIs & Services* → *OAuth consent screen*: user type **External**, leave it in **Testing**, no scopes needed, and add your own Google account under **Test users**.
+4. **Android OAuth client(s).** *APIs & Services* → *Credentials* → *Create credentials* → *OAuth client ID* → **Android**, package name `io.github.rmdodhia.gesturelauncher`, and the SHA-1 of the key that signs the APK. Each machine has its own debug key, so create one client per machine you install from:
+   - WSL build (this repo's `~/.android/debug.keystore`): `AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD`
+   - Android Studio on Windows: run `gradlew signingReport` (or `keytool -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android`) and use its SHA1.
+   
+   No Google Home Developer Console registration is needed for personal/testing use.
+5. **On the phone** (the emulator lacks the needed Play services): install, then edit a gesture → **Choose** → **Google Home** → **Connect Google Home**. Pick your account and home and allow access. Your devices appear with their room; pick one, choose On / Off / Toggle / Brightness, **Test**, then **Use this action**.
+
+Notes:
+- Commands go via Google's cloud, so expect ~0.5–2 s and they need internet. The canvas shows "*gesture* → *action*…" while a command runs, then the result; failures (offline device, timeout after 15 s, access revoked) are shown and logged in the Error log.
+- Only devices with an on/off control are listed; Brightness is offered only for dimmable ones. Some brand integrations expose fewer controls than the Google Home app shows.
+- "Access blocked … has not completed the Google verification process" means your account isn't a test user on the consent screen, or the SHA-1/package doesn't match the OAuth client.
+
 ## When something goes wrong
 
 - Errors are caught and shown on screen, and also written to **Gestures → ⋮ → Error log**. You can share that log.
@@ -75,7 +97,10 @@ Command line equivalents (from the project root):
 app/src/main/java/io/github/rmdodhia/gesturelauncher/
   core/   Pure Kotlin: model, feature extraction, $P recognizer, link parsing (unit-tested on the JVM)
   data/   JSON store (atomic writes), error/crash log
+  home/   HomeGateway interface (the app's only view of Google Home)
   ui/     Compose screens: draw canvas, gesture list, editor, action picker
   ActionRunner.kt, MainActivity.kt, GestureApp.kt, DrawTileService.kt
+app/src/home/    Real Google Home gateway (compiled only when homeSdk is set)
+app/src/nohome/  Stub used when the SDK isn't installed
 app/src/test/  JVM unit tests + Robolectric end-to-end UI tests (record → save → draw → action)
 ```

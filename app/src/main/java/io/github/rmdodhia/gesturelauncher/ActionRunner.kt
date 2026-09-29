@@ -7,21 +7,27 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.net.toUri
 import io.github.rmdodhia.gesturelauncher.core.Action
+import io.github.rmdodhia.gesturelauncher.core.HomeControl
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
+import io.github.rmdodhia.gesturelauncher.home.HomeGateway
+import kotlinx.coroutines.CancellationException
 
 /** Runs an [Action]. Returns null on success or a user-facing error message. */
 fun interface ActionRunner {
-    fun run(action: Action): String?
+    suspend fun run(action: Action): String?
 }
 
-class AndroidActionRunner(private val context: Context) : ActionRunner {
-    override fun run(action: Action): String? = try {
+class AndroidActionRunner(private val context: Context, private val home: () -> HomeGateway) : ActionRunner {
+    override suspend fun run(action: Action): String? = try {
         when (action) {
             is LaunchApp -> launchApp(action.packageName, action.label)
             is OpenUri -> openUri(action)
+            is HomeControl -> home().run(action)
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         ErrorLog.record("run ${action::class.simpleName}", e)
         "Couldn't run \"${action.label}\": ${e.message ?: e::class.simpleName}"

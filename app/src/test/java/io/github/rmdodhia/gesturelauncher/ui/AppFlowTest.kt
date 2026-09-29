@@ -17,6 +17,16 @@ import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
 import io.github.rmdodhia.gesturelauncher.data.Store
+import io.github.rmdodhia.gesturelauncher.core.HomeCommand
+import io.github.rmdodhia.gesturelauncher.core.HomeControl
+import io.github.rmdodhia.gesturelauncher.home.HOME_SDK_MISSING
+import io.github.rmdodhia.gesturelauncher.home.HomeDeviceInfo
+import io.github.rmdodhia.gesturelauncher.home.HomeGateway
+import io.github.rmdodhia.gesturelauncher.home.HomeStatus
+import io.github.rmdodhia.gesturelauncher.home.UnavailableHome
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.performScrollTo
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -50,10 +60,23 @@ class AppFlowTest {
         store = Store(File(tmp.root, "g.json"))
     }
 
-    private fun launch(incoming: Incoming? = null) {
+    private fun launch(incoming: Incoming? = null, home: HomeGateway = UnavailableHome(HOME_SDK_MISSING)) {
         compose.setContent {
-            GestureLauncherApp(store, runner, loadApps = { apps }, incoming = incoming, onIncomingHandled = {})
+            GestureLauncherApp(store, runner, home = home, loadApps = { apps }, incoming = incoming, onIncomingHandled = {})
         }
+    }
+
+    private class FakeHome(initial: HomeStatus, val list: List<HomeDeviceInfo>) : HomeGateway {
+        override val status = MutableStateFlow(initial)
+        var accessRequests = 0
+        override fun attach(activity: ComponentActivity) = Unit
+        override suspend fun requestAccess(): String? {
+            accessRequests++
+            status.value = HomeStatus.Ready
+            return null
+        }
+        override suspend fun devices() = Result.success(list)
+        override suspend fun run(action: HomeControl): String? = null
     }
 
     /** Draws a polyline in fractions of the node size, then waits past the end-of-gesture timeout. */
@@ -185,5 +208,50 @@ class AppFlowTest {
         compose.onNodeWithText("Will open: kindle://book?action=open&asin=B00B7NPRY8").assertIsDisplayed()
         compose.onNodeWithTag("useAction").performClick()
         compose.onNodeWithText("Action: Dune").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeDeviceActionConnectsPicksAndRunsFromGesture() {
+        val lamp = HomeDeviceInfo("lamp-1", "Desk lamp", "Office", canDim = true)
+        val plug = HomeDeviceInfo("plug-1", "Fan plug", null, canDim = false)
+        val home = FakeHome(HomeStatus.NeedsAccess, listOf(lamp, plug))
+        launch(home = home)
+        compose.onNodeWithTag("openGestures").performClick()
+        compose.onNodeWithTag("newGesture").performClick()
+        compose.onNodeWithTag("nameField").performTextInput("Lamp")
+        repeat(3) { drawShape("recordCanvas", *zigzag) }
+        compose.onNodeWithTag("chooseAction").performClick()
+        compose.onNodeWithTag("type_HOME").performClick()
+        compose.onNodeWithTag("homeConnect").performClick()
+        compose.waitForIdle()
+        assertEquals(1, home.accessRequests)
+
+        // Plug can't dim, so Brightness isn't offered for it.
+        compose.onNodeWithTag("device_plug-1").performClick()
+        compose.onNodeWithTag("cmd_BRIGHTNESS").assertDoesNotExist()
+        compose.onNodeWithTag("device_lamp-1").performClick()
+        compose.onNodeWithText("Office · dimmable").assertIsDisplayed()
+        compose.onNodeWithTag("cmd_BRIGHTNESS").performScrollTo().performClick()
+        compose.onNodeWithTag("useAction").performScrollTo().performClick()
+        compose.onNodeWithText("Action: Desk lamp: 50%").assertIsDisplayed()
+        compose.onNodeWithTag("save").performClick()
+        compose.waitUntil(5000) { store.data.value.gestures.isNotEmpty() }
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
+
+        drawShape("drawCanvas", *zigzag)
+        compose.waitForIdle()
+        assertEquals(listOf<Action>(HomeControl("lamp-1", "Desk lamp", HomeCommand.BRIGHTNESS, 50)), ran)
+    }
+
+    @Test
+    fun homeTabExplainsWhenSdkMissing() {
+        launch()
+        compose.onNodeWithTag("openGestures").performClick()
+        compose.onNodeWithTag("newGesture").performClick()
+        compose.onNodeWithTag("chooseAction").performClick()
+        compose.onNodeWithTag("type_HOME").performClick()
+        compose.onNodeWithTag("homeUnavailable").assertIsDisplayed()
+        compose.onNodeWithTag("useAction").assertDoesNotExist()
     }
 }

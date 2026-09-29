@@ -33,6 +33,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.rmdodhia.gesturelauncher.ActionRunner
+import io.github.rmdodhia.gesturelauncher.home.HOME_SDK_MISSING
+import io.github.rmdodhia.gesturelauncher.home.HomeGateway
+import io.github.rmdodhia.gesturelauncher.home.UnavailableHome
 import io.github.rmdodhia.gesturelauncher.AppInfo
 import io.github.rmdodhia.gesturelauncher.core.Gesture
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
@@ -58,6 +61,7 @@ sealed interface Incoming {
 fun GestureLauncherApp(
     store: Store,
     runner: ActionRunner,
+    home: HomeGateway = UnavailableHome(HOME_SDK_MISSING),
     loadApps: suspend () -> List<AppInfo>,
     incoming: Incoming?,
     onIncomingHandled: () -> Unit,
@@ -122,6 +126,7 @@ fun GestureLauncherApp(
                     isNew = s.isNew,
                     data = data,
                     runner = runner,
+                    home = home,
                     loadApps = loadApps,
                     onSave = { g -> persist("save", { screen = Screen.List }) { store.upsertGesture(g) } },
                     onDelete = { g -> persist("delete", { screen = Screen.List }) { store.deleteGesture(g.id) } },

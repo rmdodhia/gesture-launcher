@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.rmdodhia.gesturelauncher.ActionRunner
+import io.github.rmdodhia.gesturelauncher.home.HomeGateway
 import io.github.rmdodhia.gesturelauncher.AppInfo
 import io.github.rmdodhia.gesturelauncher.core.AppData
 import io.github.rmdodhia.gesturelauncher.core.FeatureExtractor
@@ -52,6 +54,7 @@ import io.github.rmdodhia.gesturelauncher.core.Gesture
 import io.github.rmdodhia.gesturelauncher.core.GestureSample
 import io.github.rmdodhia.gesturelauncher.core.Recognizer
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +63,7 @@ fun EditGestureScreen(
     isNew: Boolean,
     data: AppData,
     runner: ActionRunner,
+    home: HomeGateway,
     loadApps: suspend () -> List<AppInfo>,
     onSave: (Gesture) -> Unit,
     onDelete: (Gesture) -> Unit,
@@ -73,6 +77,7 @@ fun EditGestureScreen(
     var confirmDiscard by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     val current = initial.copy(name = name.trim(), samples = samples, action = action)
     val dirty = current != initial.copy(name = initial.name.trim()) || (isNew && (name.isNotBlank() || samples.isNotEmpty() || action != null))
@@ -81,6 +86,7 @@ fun EditGestureScreen(
         ActionPicker(
             current = action,
             runner = runner,
+            home = home,
             loadApps = loadApps,
             onPick = { action = it; picking = false; testResult = null },
             onCancel = { picking = false },
@@ -148,7 +154,11 @@ fun EditGestureScreen(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                TextButton(enabled = action != null, onClick = { testResult = action?.let { runner.run(it) } }) {
+                TextButton(enabled = action != null, onClick = {
+                    val a = action ?: return@TextButton
+                    testResult = null
+                    scope.launch { testResult = runner.run(a) }
+                }) {
                     Text("Test")
                 }
                 TextButton(onClick = { picking = true }, modifier = Modifier.testTag("chooseAction")) { Text("Choose") }

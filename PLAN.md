@@ -1,10 +1,10 @@
 # Gesture Launcher — Plan
 
-**Status:** v1 (M1–M3, M5) implemented. M0 Spike B (verify book deep links) must be done on the phone using each action's **Test** button. See README.md.
+**Status:** v1 (M1–M3, M5) implemented. M4 (Google Home) implemented behind the optional `homeSdk` Gradle property; the SDK-backed gateway still has to be compiled and verified once the Home APIs SDK is downloaded (README → Google Home setup). M0 Spike B (verify book deep links) must be done on the phone using each action's **Test** button.
 
-Draw a shape or perform a touch gesture on a full-screen canvas; the app recognizes it and runs a bound action (open app, open a specific book; Google Home control in v2).
+Draw a shape or perform a touch gesture on a full-screen canvas; the app recognizes it and runs a bound action (open app, open a specific book, control a Google Home device).
 
-**v1 scope (first pass):** capture canvas, record/recognize gestures, app + book + generic URI actions, quick access. **No Google Home / no Google Home Developers registration in v1.** The `Action` abstraction leaves a slot for Home in v2.
+**v1 scope (first pass):** capture canvas, record/recognize gestures, app + book + generic URI actions, quick access. **No Google Home / no Google Home Developers registration in v1.** Google Home was added afterwards (M4) as an optional build feature.
 
 ## Constraints & decisions
 
@@ -17,7 +17,7 @@ Draw a shape or perform a touch gesture on a full-screen canvas; the app recogni
 | Storage | Single JSON file (kotlinx.serialization), atomic writes, corrupt-file quarantine; also the export/import format |
 | Recognition | On-device, user-recorded templates; no ML training infra |
 | Overlay / draw-over-apps | **Deferred** (see Future) |
-| Google Home | **Deferred to v2** (M4); v1 needs no Home APIs SDK or developer registration |
+| Google Home | M4: optional. Builds without the SDK (stub gateway); `homeSdk=<version>` switches in `src/home` + SDK deps. No Developer Console registration (testing mode, own account as OAuth test user) |
 
 ## Architecture
 
@@ -27,7 +27,7 @@ app/src/main/java/io/github/rmdodhia/gesturelauncher/
   data/          Store (JSON), ErrorLog (crash + non-fatal log)
   ui/            Compose: CaptureSurface, DrawScreen, GestureListScreen, EditGestureScreen, ActionPicker
   ActionRunner.kt, MainActivity.kt (share intake), DrawTileService.kt
-  (v2) home/     Google Home APIs wrapper
+  home/          HomeGateway interface (+ src/home real SDK impl, src/nohome stub)
 ```
 
 No DI framework, Room or navigation library: state lives in one `Store` (StateFlow) owned by the Application.
@@ -67,11 +67,15 @@ Sealed `Action` with an executor per type; each can be tested from the binding s
 | Open Play Books book | `https://play.google.com/store/books/details?id=<volumeId>` targeted at `com.google.android.apps.books`, or Play Books share link | Medium — verify it opens reader vs. store page |
 | Open Libby book | `libbyapp.com` links (e.g. from Libby's share function) targeted at `com.overdrive.mobile.android.libby`; fallback: open Libby | High — loaned-title deep links may only open the shelf |
 | Generic intent/URL | User pastes any URI (catch-all for book links that work) | Low |
-| Google Home device (v2) | Home APIs: on/off, brightness (Dimmable/On-Off/Color Temp lights, plugs) | High — setup overhead; see below |
+| Google Home device (M4) | Home APIs: on/off, brightness (Dimmable/On-Off/Color Temp lights, plugs) | High — setup overhead; see below |
 
 Book picker UX: v1 = user pastes an ASIN / volume ID / share link. "Share to Gesture Launcher" (receive `ACTION_SEND` from Kindle/Play Books/Libby share sheets) to capture links automatically.
 
-### Google Home integration (v2 — deferred)
+### Google Home integration (M4)
+
+As built: `HomeControl(deviceId, deviceName, command = ON|OFF|TOGGLE|BRIGHTNESS, percent)` action (JSON type `"home"`); `HomeGateway` interface with `status` (Unavailable / Checking / NeedsAccess / Ready), `requestAccess`, `devices`, `run`. `src/home/.../HomeGatewayFactory.kt` wraps the SDK (15 s timeout, never throws, errors logged); `src/nohome` returns a stub. Brightness % → Matter level `round(p·254/100)` clamped to 1..254. Toggle falls back to reading on/off state if the device lacks the Toggle command.
+
+Original plan:
 
 - Sign in to Google Home Developers, download the Home APIs Android SDK, host it as a local Maven repo in the project.
 - Register the app (package name + debug SHA-1) in the Google Home Developer Console / Cloud project; add your account as a test user.
@@ -104,7 +108,7 @@ Each milestone ends with a verification on the S25+.
 - Action model, ActionPicker, app picker, book/URI actions, share-target intake, "Run now" test.
 - ✅ Gestures open chosen apps and at least the book links proven in Spike B.
 
-**M4 — Google Home (v2, after v1 ships)**
+**M4 — Google Home** — implemented (see Actions); pending on-phone verification with the real SDK
 - Spike A first: build & run Google's Home APIs Sample App on the S25+; confirm cloud-linked lights/devices are listed and on/off + brightness work.
 - SDK integration, permissions flow, device picker, on/off/brightness actions, error handling (offline, permission revoked).
 - ✅ Gesture dims a real light to a chosen %.
@@ -121,7 +125,7 @@ Each milestone ends with a verification on the S25+.
 
 ## Risks
 
-1. **Home APIs (v2)** — open beta, SDK not on Maven Central, per-brand trait coverage for cloud-to-cloud devices, cloud latency. Mitigated by Spike A + webhook fallback.
+1. **Home APIs** — open beta, SDK not on Maven Central, per-brand trait coverage for cloud-to-cloud devices, cloud latency. Mitigated by Spike A + webhook fallback.
 2. **Book deep links** — undocumented; may break with app updates. Mitigated by generic-URI action and "open app" fallback.
 3. **Emulator** — poor multi-touch; use the S25+ with wireless debugging from Windows.
 4. **Samsung system gestures** — edge swipes/Edge Panel may steal touches; use gesture exclusion rects and avoid edge-starting shapes.
@@ -134,6 +138,6 @@ Each milestone ends with a verification on the S25+.
 
 ## Resolved decisions
 
-- Google Home deferred to v2; v1 = M0 (Spike B only), M1, M2, M3, M5.
+- v1 = M0 (Spike B only), M1, M2, M3, M5. M4 added afterwards as an optional build feature.
 - Devices: cloud-to-cloud via other brands' apps; no Nest hub → Home APIs, no local control.
 - Actions execute immediately, no confirmation.

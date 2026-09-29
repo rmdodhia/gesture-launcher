@@ -6,3 +6,6 @@ build/
 .DS_Store
 captures/
 .kotlin/
+
+# Google Home APIs SDK (downloaded by hand; see README)
+/home-sdk/

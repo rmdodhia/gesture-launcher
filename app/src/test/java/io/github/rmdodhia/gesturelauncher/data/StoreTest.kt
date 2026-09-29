@@ -3,6 +3,8 @@ package io.github.rmdodhia.gesturelauncher.data
 import io.github.rmdodhia.gesturelauncher.core.AppData
 import io.github.rmdodhia.gesturelauncher.core.Gesture
 import io.github.rmdodhia.gesturelauncher.core.GestureSample
+import io.github.rmdodhia.gesturelauncher.core.HomeCommand
+import io.github.rmdodhia.gesturelauncher.core.HomeControl
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
 import io.github.rmdodhia.gesturelauncher.core.Settings
@@ -77,5 +79,29 @@ class StoreTest {
     fun actionJsonUsesStableTypeNames() {
         val json = Store.encode(AppData(gestures = listOf(g1, g2)))
         assertTrue(json, json.contains("\"type\":\"app\"") && json.contains("\"type\":\"uri\""))
+    }
+
+    @Test
+    fun homeActionRoundTripsWithDefaults() {
+        val h = HomeControl("dev-1", "Lamp", HomeCommand.BRIGHTNESS, 30)
+        assertEquals("Lamp: 30%", h.label)
+        val back = Store.decode(Store.encode(AppData(gestures = listOf(g1.copy(action = h)))))
+        assertEquals(h, back.gestures.single().action)
+        assertTrue(Store.encode(AppData(gestures = listOf(g1.copy(action = h)))).contains("\"type\":\"home\""))
+        // Hand-written/older JSON without percent or label still loads.
+        val minimal = Store.decode(
+            """{"gestures":[{"id":"a","name":"n","samples":[],"action":{"type":"home","deviceId":"d","deviceName":"Fan","command":"TOGGLE"}}]}""",
+        ).gestures.single().action as HomeControl
+        assertEquals(100, minimal.percent)
+        assertEquals("Fan: toggle", minimal.label)
+    }
+
+    @Test
+    fun brightnessPercentMapsToMatterLevel() {
+        assertEquals(3, HomeControl.levelFor(0)) // clamped to 1 %, never "off"
+        assertEquals(3, HomeControl.levelFor(1))
+        assertEquals(127, HomeControl.levelFor(50))
+        assertEquals(254, HomeControl.levelFor(100))
+        assertEquals(254, HomeControl.levelFor(250))
     }
 }

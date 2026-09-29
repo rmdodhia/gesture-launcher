@@ -5,6 +5,9 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Set homeSdk=<version> (gradle.properties or -PhomeSdk=…) once the Google Home APIs SDK is installed.
+val homeSdk = providers.gradleProperty("homeSdk").orNull?.trim().orEmpty()
+
 android {
     namespace = "io.github.rmdodhia.gesturelauncher"
     compileSdk = 36
@@ -30,6 +33,11 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    sourceSets {
+        getByName("main") {
+            java.srcDir(if (homeSdk.isNotEmpty()) "src/home/java" else "src/nohome/java")
+        }
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
@@ -59,6 +67,10 @@ dependencies {
     implementation(libs.compose.material.icons)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    if (homeSdk.isNotEmpty()) {
+        implementation("com.google.android.gms:play-services-home:$homeSdk")
+        implementation("com.google.android.gms:play-services-home-types:$homeSdk")
+    }
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 

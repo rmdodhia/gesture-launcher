@@ -23,11 +23,17 @@ class MainActivity : ComponentActivity() {
         val startupMessage = app.startupMessage.also { app.startupMessage = null }
         val crashReport = if (ErrorLog.consumeCrashFlag()) ErrorLog.read() else null
         if (savedInstanceState == null) handleIntent(intent)
+        try {
+            app.home.attach(this)
+        } catch (e: Exception) {
+            ErrorLog.record("home attach", e)
+        }
 
         setContent {
             GestureLauncherApp(
                 store = app.store,
                 runner = app.runner,
+                home = app.home,
                 loadApps = { withContext(Dispatchers.IO) { installedApps(applicationContext) } },
                 incoming = incoming.value,
                 onIncomingHandled = { incoming.value = null },

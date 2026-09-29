@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,8 +33,10 @@ import io.github.rmdodhia.gesturelauncher.core.AppData
 import io.github.rmdodhia.gesturelauncher.core.GestureSample
 import io.github.rmdodhia.gesturelauncher.core.Recognition
 import io.github.rmdodhia.gesturelauncher.core.Recognizer
+import io.github.rmdodhia.gesturelauncher.core.HomeControl
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private data class Status(val text: String, val seq: Long)
 
@@ -41,6 +44,7 @@ private data class Status(val text: String, val seq: Long)
 fun DrawScreen(data: AppData, runner: ActionRunner, onOpenGestures: () -> Unit) {
     var status by remember { mutableStateOf<Status?>(null) }
     val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(status) {
         if (status != null) {
@@ -53,10 +57,14 @@ fun DrawScreen(data: AppData, runner: ActionRunner, onOpenGestures: () -> Unit) 
         CaptureSurface(
             endTimeoutMs = data.settings.endTimeoutMs,
             onGesture = { sample ->
-                val (text, ok) = handleGesture(sample, data, runner)
-                if (text != null) {
-                    haptics.performHapticFeedback(if (ok) HapticFeedbackType.Confirm else HapticFeedbackType.Reject)
-                    status = Status(text, System.nanoTime())
+                scope.launch {
+                    val (text, ok) = handleGesture(sample, data, runner) { running ->
+                        status = Status(running, System.nanoTime())
+                    }
+                    if (text != null) {
+                        haptics.performHapticFeedback(if (ok) HapticFeedbackType.Confirm else HapticFeedbackType.Reject)
+                        status = Status(text, System.nanoTime())
+                    }
                 }
             },
             // Inset from the back-gesture edges so strokes can't be stolen by the system.
@@ -83,7 +91,12 @@ fun DrawScreen(data: AppData, runner: ActionRunner, onOpenGestures: () -> Unit) 
 }
 
 /** Returns the status text to show (null = nothing) and whether it was a success. */
-internal fun handleGesture(sample: GestureSample, data: AppData, runner: ActionRunner): Pair<String?, Boolean> {
+internal suspend fun handleGesture(
+    sample: GestureSample,
+    data: AppData,
+    runner: ActionRunner,
+    onRunning: (String) -> Unit = {},
+): Pair<String?, Boolean> {
     val result = try {
         Recognizer.recognize(sample, data.gestures, data.settings.threshold)
     } catch (e: Exception) {
@@ -97,6 +110,7 @@ internal fun handleGesture(sample: GestureSample, data: AppData, runner: ActionR
             val g = result.match.gesture
             val score = if (debug) " (${pct(result.match.score)})" else ""
             val action = g.action ?: return "${g.name}$score — no action set" to false
+            if (action is HomeControl) onRunning("${g.name} → ${action.label}…")
             val error = runner.run(action)
             if (error == null) "${g.name} → ${action.label}$score" to true else error to false
         }
