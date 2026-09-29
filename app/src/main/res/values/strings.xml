@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Gesture Launcher</string>
+    <string name="tile_label">Draw gesture</string>
+    <string name="share_label">Create gesture</string>
+</resources>
