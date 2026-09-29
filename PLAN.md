@@ -1,6 +1,6 @@
 # Gesture Launcher — Plan
 
-**Status:** v1 (M1–M3, M5) implemented. M4 (Google Home) implemented behind the optional `homeSdk` Gradle property; the SDK-backed gateway still has to be compiled and verified once the Home APIs SDK is downloaded (README → Google Home setup). M0 Spike B (verify book deep links) must be done on the phone using each action's **Test** button.
+**Status:** v1 (M1–M3, M5) implemented. M4 (Google Home) implemented behind the `homeSdk` Gradle property; compiles against the real SDK 17.1.0 (Kotlin 2.4) and reaches Google's consent screen on the emulator. Still to verify on the S25+: OAuth consent, device list, commands (README → Google Home setup). M0 Spike B (verify book deep links) must be done on the phone using each action's **Test** button.
 
 Draw a shape or perform a touch gesture on a full-screen canvas; the app recognizes it and runs a bound action (open app, open a specific book, control a Google Home device).
 
@@ -108,7 +108,7 @@ Each milestone ends with a verification on the S25+.
 - Action model, ActionPicker, app picker, book/URI actions, share-target intake, "Run now" test.
 - ✅ Gestures open chosen apps and at least the book links proven in Spike B.
 
-**M4 — Google Home** — implemented (see Actions); pending on-phone verification with the real SDK
+**M4 — Google Home** — implemented and built against SDK 17.1.0; pending on-phone verification (consent, devices, commands)
 - Spike A first: build & run Google's Home APIs Sample App on the S25+; confirm cloud-linked lights/devices are listed and on/off + brightness work.
 - SDK integration, permissions flow, device picker, on/off/brightness actions, error handling (offline, permission revoked).
 - ✅ Gesture dims a real light to a chosen %.

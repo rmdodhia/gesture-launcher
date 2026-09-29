@@ -9,3 +9,4 @@ captures/
 
 # Google Home APIs SDK (downloaded by hand; see README)
 /home-sdk/
+/home.android.sdk_*.zip
