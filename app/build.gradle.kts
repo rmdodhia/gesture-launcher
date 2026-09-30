@@ -5,8 +5,16 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Set homeSdk=<version> (gradle.properties or -PhomeSdk=…) once the Google Home APIs SDK is installed.
-val homeSdk = providers.gradleProperty("homeSdk").orNull?.trim().orEmpty()
+// Google Home control is compiled in only if the Google Home APIs SDK version named by homeSdk
+// (gradle.properties or -PhomeSdk=…) is present in ./home-sdk or ~/.m2. Otherwise the app builds without it.
+val homeSdkVersion = providers.gradleProperty("homeSdk").orNull?.trim().orEmpty()
+val homeSdk = homeSdkVersion.takeIf { v ->
+    v.isNotEmpty() && listOf(rootProject.file("home-sdk"), File(System.getProperty("user.home"), ".m2/repository"))
+        .any { File(it, "com/google/android/gms/play-services-home/$v").isDirectory }
+}.orEmpty()
+if (homeSdkVersion.isNotEmpty() && homeSdk.isEmpty()) {
+    logger.lifecycle("Google Home APIs SDK $homeSdkVersion not found in home-sdk/ or ~/.m2; building without Google Home control.")
+}
 
 android {
     namespace = "io.github.rmdodhia.gesturelauncher"

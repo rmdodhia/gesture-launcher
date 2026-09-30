@@ -1,6 +1,6 @@
 # Gesture Launcher — Plan
 
-**Status:** v1 (M1–M3, M5) implemented. M4 (Google Home) implemented behind the `homeSdk` Gradle property; compiles against the real SDK 17.1.0 (Kotlin 2.4) and reaches Google's consent screen on the emulator. Still to verify on the S25+: OAuth consent, device list, commands (README → Google Home setup). M0 Spike B (verify book deep links) must be done on the phone using each action's **Test** button.
+**Status:** M1–M5 implemented, plus a unified Book list (Play Books via the Books API; Kindle/Libby via the share sheet). This is the original design document for a personal build on a Galaxy S25+; the [README](README.md) describes the current app.
 
 Draw a shape or perform a touch gesture on a full-screen canvas; the app recognizes it and runs a bound action (open app, open a specific book, control a Google Home device).
 

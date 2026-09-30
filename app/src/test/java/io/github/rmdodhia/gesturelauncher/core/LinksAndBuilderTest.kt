@@ -54,7 +54,7 @@ class LinksAndBuilderTest {
 
     @Test
     fun sharedTitlesAreCleaned() {
-        // Exactly what Kindle for Samsung sent ("Recommend this book").
+        // The format Kindle for Samsung sends ("Recommend this book").
         val k = Links.actionFromShare("https://www.amazon.com/dp/B00B7NPRY8", "Check out this book – \"Dune\"", Links.KINDLE_SAMSUNG_PACKAGE)!!
         assertEquals("Dune", k.label)
         assertEquals("Dune", Links.bookFrom(k)!!.title)
@@ -62,7 +62,7 @@ class LinksAndBuilderTest {
         assertEquals("Reading Lolita in Tehran", Links.cleanTitle("Reading Lolita in Tehran"))
         assertEquals("Check out this book", Links.cleanTitle("Check out this book"))
 
-        // Exactly what Libby sent: "Title - Author".
+        // The format Libby sends: "Title - Author".
         val l = Links.bookFrom(Links.actionFromShare("https://share.libbyapp.com/title/7654321", "Cien años de soledad - Gabriel García Márquez", null)!!)!!
         assertEquals("Cien años de soledad" to "Gabriel García Márquez", l.title to l.author)
     }

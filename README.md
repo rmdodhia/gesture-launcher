@@ -1,24 +1,28 @@
 # Gesture Launcher
 
-Draw a shape, tap with several fingers, swipe, or tap a rhythm on a full-screen canvas, and the phone opens an app or a specific book, or switches/dims a Google Home device. You record your own gestures.
+[![CI](https://github.com/rmdodhia/gesture-launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/rmdodhia/gesture-launcher/actions/workflows/ci.yml)
 
-See [PLAN.md](PLAN.md) for the design and roadmap. Google Home control needs a one-time setup: see [Google Home setup](#google-home-setup).
+An Android app that turns gestures into actions. Draw a shape, tap with several fingers, swipe, or tap a rhythm on a full-screen canvas, and the phone opens an app, opens a specific book in Kindle, Libby or Google Play Books, or switches/dims a Google Home light or plug. You record your own gestures; recognition runs on the device.
 
-## Build & install (Android Studio on Windows → Galaxy S25+)
+- **Gestures:** single- and multi-stroke shapes, multi-finger taps and swipes, tap rhythms. Recognition uses a [$P point-cloud recognizer](https://depts.washington.edu/acelab/proj/dollar/pdollar.html) plus finger/stroke/tap-count checks, and refuses ambiguous matches.
+- **Actions:** open any app; open a book from one combined list (Play Books synced automatically, Kindle/Libby added via the share sheet); control Google Home devices, including ones linked from other brands' apps; open any link.
+- **Quick access:** a Quick Settings tile opens the drawing canvas.
+- **Private:** gestures and your book list are stored only on the phone. The app talks to Google's APIs only if you connect Play Books or Google Home.
 
-1. **Get the project onto Windows.** Gradle is slow and unreliable on `\\wsl$` paths, so copy or clone it to a Windows folder:
-   ```powershell
-   git clone \\wsl.localhost\Ubuntu\home\you\gesture-launcher C:\dev\android-interface
-   ```
-   (Adjust the distro name if needed, or copy the folder over.)
-2. **Open it in Android Studio** with File → Open → `C:\dev\android-interface`, then let Gradle sync. The bundled JDK is fine.
-3. **Turn on wireless debugging on the S25+:**
-   - Settings → About phone → Software information → tap *Build number* 7 times.
-   - Settings → Developer options → *Wireless debugging* → On.
-   - In Android Studio: Device Manager → *Pair devices using Wi-Fi* → scan the QR code from the phone.
-4. **Run** with the green ▶ button and the `app` configuration on the S25+.
+It's a personal project, developed and tested on a Samsung Galaxy S25+. It needs Android 10 or later. Design notes and roadmap: [PLAN.md](PLAN.md).
 
-Use the emulator only for single-finger UI checks; the emulator can't simulate multi-finger gestures.
+## Build & install
+
+Requirements: [Android Studio](https://developer.android.com/studio) (or JDK 17+ and the Android SDK for command-line builds) and an Android phone with [developer options and USB or wireless debugging](https://developer.android.com/studio/debug/dev-options) turned on.
+
+1. Clone the repo and open it in Android Studio (File → Open), then let Gradle sync. The bundled JDK is fine.
+   - On Windows with WSL, keep the project on the Windows filesystem (e.g. `C:\dev\gesture-launcher`); Gradle is slow and unreliable on `\\wsl$` paths.
+2. Connect your phone (USB, or Device Manager → *Pair devices using Wi-Fi*).
+3. Run with the green ▶ button and the `app` configuration.
+
+That's all you need for gestures, apps, links and hand-added books. Two features need a one-time Google Cloud setup of your own, because Google only issues access to apps registered to you: [Play Books sync](#books) and [Google Home control](#google-home-setup). Without them the app still works; those screens just explain what's missing.
+
+Use the emulator only for single-finger UI checks; it can't simulate multi-finger gestures, and Google Home control doesn't work on it.
 
 Command line equivalents (from the project root):
 
@@ -60,7 +64,7 @@ Command line equivalents (from the project root):
 
 The Book list combines three sources:
 
-- **Play Books: automatic.** The first time you open **Book**, tap **Connect** next to *Play Books* and allow access. Your *Reading now* shelf and *My books* are then listed and refreshed whenever you open the list (at most every 10 min; **Refresh** forces it). This uses Google's official Books API, which needs a one-time switch: in the same Google Cloud project as the [Google Home setup](#google-home-setup), open <https://console.cloud.google.com/apis/library/books.googleapis.com> and click **Enable**. If you skip this, the app says so. It uses the same OAuth clients (package name + SHA-1) as Google Home.
+- **Play Books: automatic.** The first time you open **Book**, tap **Connect** next to *Play Books* and allow access. Your *Reading now* shelf and *My books* are then listed and refreshed whenever you open the list (at most every 10 min; **Refresh** forces it). This uses Google's official Books API, so it needs your own Google Cloud project and OAuth client: do steps 3–4 of the [Google Home setup](#google-home-setup) (the Home SDK itself isn't needed). Then, in that project, open <https://console.cloud.google.com/apis/library/books.googleapis.com> and click **Enable**. If you skip this, the app says so. It uses the same OAuth clients (package name + SHA-1) as Google Home.
 - **Kindle and Libby: share them in.** In Kindle or Libby, open a book's page and tap **Share → Gesture Launcher**. You can also tap **Add by link** in the list and paste an Amazon/Kindle link, an ASIN, or a Libby link. New books go under *Reading now*; use ⋮ on a book to move it or remove it.
   - Kindle opens the book with `kindle://book?action=open&asin=…`. The Galaxy Store build of Kindle (`com.amazon.kindlefs`) and the Play Store build both work.
   - Libby share links (`share.libbyapp.com/title/…#library-…`) are rewritten to the title page inside Libby (`libbyapp.com/library/<library>/everything/page-1/<id>`), where you tap *Open book*.
@@ -69,16 +73,16 @@ Why Kindle and Libby aren't listed automatically: neither has a public API. Amaz
 
 ## Google Home setup
 
-Controls any light or plug that works in the Google Home app, including ones linked from other brands' apps ("cloud-to-cloud"); no Nest hub needed for those. It uses Google's **Home APIs**, which have two hurdles: the SDK isn't on a public Maven repo (you download it after signing in), and Google only lets the app talk to your home after an OAuth setup in Google Cloud. Without the SDK the app builds and works normally, and the Google Home tab just explains what's missing.
+Controls any light or plug that works in the Google Home app, including ones linked from other brands' apps ("cloud-to-cloud"); no Nest hub needed for those. It uses Google's **Home APIs**, which have two hurdles: the SDK isn't on a public Maven repo (you download it after signing in, and it can't be redistributed here), and Google only lets the app talk to your home after an OAuth setup in your own Google Cloud project. Without the SDK the app builds and works normally, and the Google Home tab just explains what's missing.
 
 Do this once, on the machine you build on:
 
 1. **Download the SDK.** Sign in at <https://developers.home.google.com/apis/android/sdk> and download the Android SDK zip (e.g. `home.android.sdk_1_11_0.zip`, which contains Maven artifacts version 17.1.0). Unzip it into the project as `home-sdk/` (git-ignored) so you have `home-sdk/com/google/android/gms/play-services-home/17.1.0/…`, or into `~/.m2/repository/` (on Windows `%USERPROFILE%\.m2\repository\`).
-2. **Turn it on.** `gradle.properties` has `homeSdk=17.1.0`; set it to the version folder name you have. To build without the SDK (e.g. a fresh clone without `home-sdk/`), comment that line out or pass `-PhomeSdk=`. The SDK is compiled with Kotlin 2.4, so the project must stay on Kotlin ≥ 2.4 (`gradle/libs.versions.toml`).
+2. **Check the version.** `gradle.properties` has `homeSdk=17.1.0`; if your download has a different version folder, change it. The build uses the SDK automatically when that version is present in `home-sdk/` or `~/.m2`, and prints a note and builds without it otherwise. Pass `-PhomeSdk=` to force a build without it. The SDK is compiled with Kotlin 2.4, so the project must stay on Kotlin ≥ 2.4 (`gradle/libs.versions.toml`).
 3. **Google Cloud project + OAuth consent screen.** In <https://console.cloud.google.com>, create a project → *APIs & Services* → *OAuth consent screen*: user type **External**, leave it in **Testing**, no scopes needed, and add your own Google account under **Test users**.
-4. **Android OAuth client(s).** *APIs & Services* → *Credentials* → *Create credentials* → *OAuth client ID* → **Android**, package name `io.github.rmdodhia.gesturelauncher`, and the SHA-1 of the key that signs the APK. Each machine has its own debug key, so create one client per machine you install from:
-   - WSL build (this repo's `~/.android/debug.keystore`): `AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD`
-   - Android Studio on Windows: run `gradlew signingReport` (or `keytool -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android`) and use its SHA1.
+4. **Android OAuth client(s).** *APIs & Services* → *Credentials* → *Create credentials* → *OAuth client ID* → **Android**, package name `io.github.rmdodhia.gesturelauncher`, and the SHA-1 of the key that signs the APK. Each machine has its own debug key (`~/.android/debug.keystore`), so create one client per machine you install from. To get the SHA-1:
+   - Run `./gradlew signingReport` (Windows: `gradlew signingReport`) and copy the `SHA1` line of the `debug` variant, e.g. `SHA1: AB:CD:…:12` (20 pairs).
+   - Or run `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`. On Windows, `keytool` is in Android Studio's `jbr\bin` folder: `& "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe" -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android`.
    
    No Google Home Developer Console registration is needed for personal/testing use.
 5. **On the phone** (the emulator lacks the needed Play services): install, then edit a gesture → **Choose** → **Google Home** → **Connect Google Home**. Pick your account and home and allow access. Your devices appear with their room; pick one, choose On / Off / Toggle / Brightness, **Test**, then **Use this action**.
@@ -107,10 +111,19 @@ Notes:
 app/src/main/java/io/github/rmdodhia/gesturelauncher/
   core/   Pure Kotlin: model, feature extraction, $P recognizer, link parsing (unit-tested on the JVM)
   data/   JSON store (atomic writes), error/crash log
+  books/  Book sources (Play Books via the Google Books API) and the unified library
   home/   HomeGateway interface (the app's only view of Google Home)
   ui/     Compose screens: draw canvas, gesture list, editor, action picker
   ActionRunner.kt, MainActivity.kt, GestureApp.kt, DrawTileService.kt
-app/src/home/    Real Google Home gateway (compiled only when homeSdk is set)
+app/src/home/    Real Google Home gateway (compiled only when the Home APIs SDK is present)
 app/src/nohome/  Stub used when the SDK isn't installed
 app/src/test/  JVM unit tests + Robolectric end-to-end UI tests (record → save → draw → action)
 ```
+
+## Contributing
+
+Issues and pull requests are welcome. Please run `./gradlew testDebugUnitTest lintDebug assembleDebug` before sending a change; CI runs the same (without the Google Home SDK). Gesture recognition and link parsing live in `core/` as plain Kotlin with JVM tests, which is the easiest place to start.
+
+## License and trademarks
+
+[MIT](LICENSE). Not affiliated with or endorsed by Google, Amazon or OverDrive. Kindle, Libby, Google Play Books and Google Home are trademarks of their respective owners. The app opens their apps through public or de-facto links and uses only Google's official APIs; it does not access Kindle or Libby accounts.
