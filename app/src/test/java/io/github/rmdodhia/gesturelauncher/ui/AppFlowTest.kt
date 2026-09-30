@@ -5,6 +5,7 @@ import androidx.compose.ui.test.TouchInjectionScope
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -201,6 +202,8 @@ class AppFlowTest {
         launch(Incoming.SharedLink(action))
         compose.waitUntil(5000) { store.data.value.books.isNotEmpty() }
         assertEquals(Book(BookApp.KINDLE, "B00B7NPRY8", "Dune", uri = action.uri, reading = true), store.data.value.books.single())
+        // The snackbar appears asynchronously (slower on CI).
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Make gesture").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Make gesture").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("New gesture").assertIsDisplayed()
