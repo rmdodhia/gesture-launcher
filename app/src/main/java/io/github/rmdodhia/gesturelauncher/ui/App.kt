@@ -106,7 +106,8 @@ fun GestureLauncherApp(
             is Incoming.SharedLink -> {
                 val action = incoming.action
                 val newGesture = Screen.Edit(Gesture(UUID.randomUUID().toString(), action.label, emptyList(), action), isNew = true)
-                val book = Links.bookFrom(action)
+                // Books you share in are usually the ones you're reading.
+                val book = Links.bookFrom(action)?.copy(reading = true)
                 if (book == null) {
                     screen = newGesture
                 } else {

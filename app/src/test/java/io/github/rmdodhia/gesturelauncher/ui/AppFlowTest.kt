@@ -200,7 +200,7 @@ class AppFlowTest {
         val action = OpenUri(Links.kindleUri("B00B7NPRY8"), Links.KINDLE_PACKAGE, "Dune")
         launch(Incoming.SharedLink(action))
         compose.waitUntil(5000) { store.data.value.books.isNotEmpty() }
-        assertEquals(Book(BookApp.KINDLE, "B00B7NPRY8", "Dune", uri = action.uri), store.data.value.books.single())
+        assertEquals(Book(BookApp.KINDLE, "B00B7NPRY8", "Dune", uri = action.uri, reading = true), store.data.value.books.single())
         compose.onNodeWithText("Make gesture").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("New gesture").assertIsDisplayed()

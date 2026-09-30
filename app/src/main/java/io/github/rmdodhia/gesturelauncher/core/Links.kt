@@ -15,6 +15,12 @@ object Links {
     private val URL = Regex("https?://[^\\s<>\"']+", RegexOption.IGNORE_CASE)
     private val PLAY_ID = Regex("[?&]id=([A-Za-z0-9_-]+)")
     private val PLAY_ID_ALONE = Regex("^[A-Za-z0-9_-]{6,}$")
+    // Share-text boilerplate, e.g. Kindle's 'Check out this book – "Dune"'.
+    private val SHARE_PREFIX = Regex(
+        "^(?:check out this book|check this out|recommend(?:ed)?(?: this book)?|i'm reading|i am reading)\\s*[-–—:]\\s*",
+        RegexOption.IGNORE_CASE,
+    )
+    private const val QUOTES = "\"'“”‘’«»"
     private val LIBBY_SHARE = Regex("^https?://share\\.libbyapp\\.com/title/(\\d+)", RegexOption.IGNORE_CASE)
     private val LIBBY_LIBRARY_HASH = Regex("#library-([\\w-]+)")
     private val LIBBY_TITLE_PATH = Regex("^https?://libbyapp\\.com/.*/(\\d+)/?(?:[?#].*)?$", RegexOption.IGNORE_CASE)
@@ -24,6 +30,14 @@ object Links {
 
     /** Opens the book in the Play Books reader (the app handles play.google.com/books/reader links). */
     fun playBooksUri(volumeId: String) = "https://play.google.com/books/reader?id=$volumeId"
+
+    /** Removes share boilerplate and surrounding quotes from a shared title. */
+    fun cleanTitle(raw: String): String {
+        var t = raw.trim()
+        t = t.replace(SHARE_PREFIX, "").trim()
+        if (t.length >= 2 && t.first() in QUOTES && t.last() in QUOTES) t = t.substring(1, t.length - 1).trim()
+        return t.ifEmpty { raw.trim() }
+    }
 
     /**
      * Libby's share links (share.libbyapp.com) open in the browser, not the app. When the link names the
@@ -66,9 +80,11 @@ object Links {
     fun actionFromShare(text: String, subject: String?, referrerPackage: String?): OpenUri? {
         val url = firstUrl(text) ?: return null
         val host = hostOf(url)
-        val title = (subject?.trim()?.takeIf { it.isNotEmpty() }
-            ?: text.replace(url, "").trim { it.isWhitespace() || it in "-:\"'.,;|()" }.takeIf { it.isNotEmpty() }
-            ?: host ?: url).take(60)
+        val title = cleanTitle(
+            subject?.trim()?.takeIf { it.isNotEmpty() }
+                ?: text.replace(url, "").trim { it.isWhitespace() || it in "-:\"'.,;|()" }.takeIf { it.isNotEmpty() }
+                ?: host ?: url,
+        ).take(60)
         val decoded = runCatching { URLDecoder.decode(url, "UTF-8") }.getOrDefault(url)
         val isAmazon = host != null && (host.contains("amazon.") || host == "a.co")
         if (referrerPackage in KINDLE_PACKAGES || isAmazon) {
@@ -92,7 +108,12 @@ object Links {
                 extractAsin(uri)?.let { Book(BookApp.KINDLE, it, title, uri = kindleUri(it)) }
             a.packageName == PLAY_BOOKS_PACKAGE ->
                 extractPlayBooksId(uri)?.let { Book(BookApp.PLAY_BOOKS, it, title, uri = playBooksUri(it)) }
-            a.packageName == LIBBY_PACKAGE -> Book(BookApp.LIBBY, libbyTitleId(uri) ?: uri, title, uri = uri)
+            a.packageName == LIBBY_PACKAGE -> {
+                // Libby shares "Title - Author".
+                val i = title.lastIndexOf(" - ")
+                val (t, author) = if (i > 0) title.substring(0, i).trim() to title.substring(i + 3).trim() else title to null
+                Book(BookApp.LIBBY, libbyTitleId(uri) ?: uri, t, author?.ifEmpty { null }, uri = uri)
+            }
             else -> null
         }
     }
