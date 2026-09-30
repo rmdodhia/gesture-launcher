@@ -4,6 +4,9 @@ import java.net.URLDecoder
 
 object Links {
     const val KINDLE_PACKAGE = "com.amazon.kindle"
+    /** Kindle from the Samsung Galaxy Store; same app, different package. */
+    const val KINDLE_SAMSUNG_PACKAGE = "com.amazon.kindlefs"
+    val KINDLE_PACKAGES = listOf(KINDLE_PACKAGE, KINDLE_SAMSUNG_PACKAGE)
     const val PLAY_BOOKS_PACKAGE = "com.google.android.apps.books"
     const val LIBBY_PACKAGE = "com.overdrive.mobile.android.libby"
 
@@ -12,11 +15,33 @@ object Links {
     private val URL = Regex("https?://[^\\s<>\"']+", RegexOption.IGNORE_CASE)
     private val PLAY_ID = Regex("[?&]id=([A-Za-z0-9_-]+)")
     private val PLAY_ID_ALONE = Regex("^[A-Za-z0-9_-]{6,}$")
+    private val LIBBY_SHARE = Regex("^https?://share\\.libbyapp\\.com/title/(\\d+)", RegexOption.IGNORE_CASE)
+    private val LIBBY_LIBRARY_HASH = Regex("#library-([\\w-]+)")
+    private val LIBBY_TITLE_PATH = Regex("^https?://libbyapp\\.com/.*/(\\d+)/?(?:[?#].*)?$", RegexOption.IGNORE_CASE)
 
     /** Unofficial Kindle deep link; opens the book if it is in the library on this device. */
     fun kindleUri(asin: String) = "kindle://book?action=open&asin=$asin"
 
-    fun playBooksUri(volumeId: String) = "https://play.google.com/store/books/details?id=$volumeId"
+    /** Opens the book in the Play Books reader (the app handles play.google.com/books/reader links). */
+    fun playBooksUri(volumeId: String) = "https://play.google.com/books/reader?id=$volumeId"
+
+    /**
+     * Libby's share links (share.libbyapp.com) open in the browser, not the app. When the link names the
+     * library (#library-xyz), point it at the title page inside Libby instead.
+     */
+    fun libbyAppUri(url: String): String {
+        val id = LIBBY_SHARE.find(url)?.groupValues?.get(1) ?: return url
+        val library = LIBBY_LIBRARY_HASH.find(url)?.groupValues?.get(1) ?: return url
+        return "https://libbyapp.com/library/$library/everything/page-1/$id"
+    }
+
+    /** Libby's numeric title ID from a share or libbyapp.com title link. */
+    fun libbyTitleId(url: String): String? =
+        LIBBY_SHARE.find(url)?.groupValues?.get(1) ?: LIBBY_TITLE_PATH.find(url)?.groupValues?.get(1)
+
+    /** Packages that should be tried, in order, for an action targeting [pkg]. */
+    fun equivalentPackages(pkg: String): List<String> =
+        if (pkg in KINDLE_PACKAGES) listOf(pkg) + KINDLE_PACKAGES.filter { it != pkg } else listOf(pkg)
 
     /** Accepts a bare ASIN or an Amazon/Kindle URL containing one. */
     fun extractAsin(input: String): String? {
@@ -46,17 +71,39 @@ object Links {
             ?: host ?: url).take(60)
         val decoded = runCatching { URLDecoder.decode(url, "UTF-8") }.getOrDefault(url)
         val isAmazon = host != null && (host.contains("amazon.") || host == "a.co")
-        if (referrerPackage == KINDLE_PACKAGE || isAmazon) {
+        if (referrerPackage in KINDLE_PACKAGES || isAmazon) {
             extractAsin(decoded)?.let { return OpenUri(kindleUri(it), KINDLE_PACKAGE, title) }
         }
         if (referrerPackage == PLAY_BOOKS_PACKAGE || (host != null && (host == "play.google.com" || host.startsWith("books.google.")))) {
             extractPlayBooksId(url)?.let { return OpenUri(playBooksUri(it), PLAY_BOOKS_PACKAGE, title) }
         }
         if (referrerPackage == LIBBY_PACKAGE || host == "libbyapp.com" || host?.endsWith(".libbyapp.com") == true) {
-            return OpenUri(url, LIBBY_PACKAGE, title)
+            return OpenUri(libbyAppUri(url), LIBBY_PACKAGE, title)
         }
         return OpenUri(url, null, title)
     }
+
+    /** The book an [OpenUri] points at, if it targets Kindle, Play Books or Libby; otherwise null. */
+    fun bookFrom(a: OpenUri): Book? {
+        val uri = a.uri.trim()
+        val title = a.label.trim().ifEmpty { uri }
+        return when {
+            uri.startsWith("kindle://", ignoreCase = true) || a.packageName in KINDLE_PACKAGES ->
+                extractAsin(uri)?.let { Book(BookApp.KINDLE, it, title, uri = kindleUri(it)) }
+            a.packageName == PLAY_BOOKS_PACKAGE ->
+                extractPlayBooksId(uri)?.let { Book(BookApp.PLAY_BOOKS, it, title, uri = playBooksUri(it)) }
+            a.packageName == LIBBY_PACKAGE -> Book(BookApp.LIBBY, libbyTitleId(uri) ?: uri, title, uri = uri)
+            else -> null
+        }
+    }
+
+    fun packageFor(app: BookApp): String = when (app) {
+        BookApp.KINDLE -> KINDLE_PACKAGE
+        BookApp.LIBBY -> LIBBY_PACKAGE
+        BookApp.PLAY_BOOKS -> PLAY_BOOKS_PACKAGE
+    }
+
+    fun actionFor(book: Book): OpenUri = OpenUri(book.uri, packageFor(book.app), book.title.take(60))
 
     fun hostOf(url: String): String? =
         runCatching { java.net.URI(url).host?.lowercase()?.removePrefix("www.") }.getOrNull()

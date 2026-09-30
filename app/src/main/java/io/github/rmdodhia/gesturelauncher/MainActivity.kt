@@ -28,6 +28,13 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             ErrorLog.record("home attach", e)
         }
+        app.bookSources.forEach {
+            try {
+                it.attach(this)
+            } catch (e: Exception) {
+                ErrorLog.record("books attach ${it.app}", e)
+            }
+        }
 
         setContent {
             GestureLauncherApp(
@@ -35,6 +42,7 @@ class MainActivity : ComponentActivity() {
                 runner = app.runner,
                 home = app.home,
                 loadApps = { withContext(Dispatchers.IO) { installedApps(applicationContext) } },
+                bookSources = app.bookSources,
                 incoming = incoming.value,
                 onIncomingHandled = { incoming.value = null },
                 startupMessage = startupMessage,

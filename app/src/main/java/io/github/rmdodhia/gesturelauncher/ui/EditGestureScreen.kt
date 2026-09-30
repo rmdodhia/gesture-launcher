@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import io.github.rmdodhia.gesturelauncher.ActionRunner
 import io.github.rmdodhia.gesturelauncher.home.HomeGateway
 import io.github.rmdodhia.gesturelauncher.AppInfo
+import io.github.rmdodhia.gesturelauncher.books.Library
 import io.github.rmdodhia.gesturelauncher.core.AppData
 import io.github.rmdodhia.gesturelauncher.core.FeatureExtractor
 import io.github.rmdodhia.gesturelauncher.core.Gesture
@@ -65,6 +66,7 @@ fun EditGestureScreen(
     runner: ActionRunner,
     home: HomeGateway,
     loadApps: suspend () -> List<AppInfo>,
+    library: Library,
     onSave: (Gesture) -> Unit,
     onDelete: (Gesture) -> Unit,
     onClose: () -> Unit,
@@ -88,6 +90,8 @@ fun EditGestureScreen(
             runner = runner,
             home = home,
             loadApps = loadApps,
+            books = data.books,
+            library = library,
             onPick = { action = it; picking = false; testResult = null },
             onCancel = { picking = false },
         )

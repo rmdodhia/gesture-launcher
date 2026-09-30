@@ -9,10 +9,15 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import io.github.rmdodhia.gesturelauncher.ActionRunner
 import io.github.rmdodhia.gesturelauncher.AppInfo
+import io.github.rmdodhia.gesturelauncher.books.BookSource
+import io.github.rmdodhia.gesturelauncher.books.FetchResult
 import io.github.rmdodhia.gesturelauncher.core.Action
+import io.github.rmdodhia.gesturelauncher.core.Book
+import io.github.rmdodhia.gesturelauncher.core.BookApp
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
@@ -27,6 +32,7 @@ import io.github.rmdodhia.gesturelauncher.home.UnavailableHome
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.performScrollTo
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -60,9 +66,16 @@ class AppFlowTest {
         store = Store(File(tmp.root, "g.json"))
     }
 
-    private fun launch(incoming: Incoming? = null, home: HomeGateway = UnavailableHome(HOME_SDK_MISSING)) {
+    private fun launch(
+        incoming: Incoming? = null,
+        home: HomeGateway = UnavailableHome(HOME_SDK_MISSING),
+        bookSources: List<BookSource> = emptyList(),
+    ) {
         compose.setContent {
-            GestureLauncherApp(store, runner, home = home, loadApps = { apps }, incoming = incoming, onIncomingHandled = {})
+            GestureLauncherApp(
+                store, runner, home = home, loadApps = { apps }, bookSources = bookSources,
+                incoming = incoming, onIncomingHandled = {},
+            )
         }
     }
 
@@ -183,9 +196,12 @@ class AppFlowTest {
     }
 
     @Test
-    fun sharedLinkOpensNewGestureWithAction() {
+    fun sharedBookGoesOnShelfAndCanBecomeGesture() {
         val action = OpenUri(Links.kindleUri("B00B7NPRY8"), Links.KINDLE_PACKAGE, "Dune")
         launch(Incoming.SharedLink(action))
+        compose.waitUntil(5000) { store.data.value.books.isNotEmpty() }
+        assertEquals(Book(BookApp.KINDLE, "B00B7NPRY8", "Dune", uri = action.uri), store.data.value.books.single())
+        compose.onNodeWithText("Make gesture").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("New gesture").assertIsDisplayed()
         compose.onNodeWithText("Action: Dune").assertIsDisplayed()
@@ -197,15 +213,81 @@ class AppFlowTest {
     }
 
     @Test
-    fun kindlePickerBuildsDeepLink() {
-        launch()
+    fun sharedNonBookLinkOpensNewGesture() {
+        val action = OpenUri("https://example.com/x", null, "Example")
+        launch(Incoming.SharedLink(action))
+        compose.waitForIdle()
+        compose.onNodeWithText("New gesture").assertIsDisplayed()
+        compose.onNodeWithText("Action: Example").assertIsDisplayed()
+        assertTrue(store.data.value.books.isEmpty())
+    }
+
+    /** Needs consent until an interactive fetch, then returns [books]. */
+    private class FakeBooks(val books: List<Book>) : BookSource {
+        override val app = BookApp.PLAY_BOOKS
+        var connected = false
+        override fun attach(activity: ComponentActivity) = Unit
+        override suspend fun fetch(interactive: Boolean): FetchResult {
+            if (interactive) connected = true
+            return if (connected) FetchResult.Books(books) else FetchResult.NeedsConsent
+        }
+    }
+
+    private fun openBookPicker() {
         compose.onNodeWithTag("openGestures").performClick()
         compose.onNodeWithTag("newGesture").performClick()
+        compose.onNodeWithTag("nameField").performTextInput("Read")
+        repeat(3) { drawShape("recordCanvas", *zigzag) }
         compose.onNodeWithTag("chooseAction").performClick()
-        compose.onNodeWithTag("type_KINDLE").performClick()
-        compose.onNodeWithTag("actionLabel").performTextInput("Dune")
-        compose.onNodeWithTag("actionInput").performTextInput("https://www.amazon.com/dp/B00B7NPRY8/")
-        compose.onNodeWithText("Will open: kindle://book?action=open&asin=B00B7NPRY8").assertIsDisplayed()
+        compose.onNodeWithTag("type_BOOK").performClick()
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun bookPickerMergesAppsAndOpensTheRightOne() = runTest {
+        val emma = Book(BookApp.PLAY_BOOKS, "vol1", "Emma", "Jane Austen", Links.playBooksUri("vol1"), reading = true)
+        val circe = Book(BookApp.LIBBY, "https://share.libbyapp.com/title/1", "Circe", uri = "https://share.libbyapp.com/title/1")
+        store.addBook(circe)
+        launch(bookSources = listOf(FakeBooks(listOf(emma, emma.copy(id = "vol2", title = "Persuasion", reading = false)))))
+        openBookPicker()
+
+        compose.onNodeWithTag("connect_PLAY_BOOKS").performClick()
+        compose.waitUntil(5000) { store.data.value.books.size == 3 }
+        compose.onNodeWithText("Reading now").assertIsDisplayed()
+        compose.onNodeWithText("Jane Austen · Play Books").assertIsDisplayed()
+        compose.onNodeWithText("Libby").assertIsDisplayed()
+
+        compose.onNodeWithTag("bookSearch").performTextInput("emm")
+        compose.onNodeWithText("Circe").assertDoesNotExist()
+        compose.onNodeWithTag("book_PLAY_BOOKS:vol1").performClick()
+        compose.onNodeWithTag("useAction").performClick()
+        compose.onNodeWithText("Action: Emma").assertIsDisplayed()
+        compose.onNodeWithTag("save").performClick()
+        compose.waitUntil(5000) { store.data.value.gestures.isNotEmpty() }
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
+
+        drawShape("drawCanvas", *zigzag)
+        assertEquals(listOf<Action>(OpenUri(Links.playBooksUri("vol1"), Links.PLAY_BOOKS_PACKAGE, "Emma")), ran)
+    }
+
+    @Test
+    fun addBookByLink() {
+        launch()
+        openBookPicker()
+        compose.onNodeWithText("No books yet", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("addBook").performClick()
+        compose.onNodeWithTag("addBookTitle").performTextInput("Dune")
+        compose.onNodeWithTag("addBookLink").performTextInput("https://example.com/nope")
+        compose.onNodeWithText("Not a Kindle/Amazon, Libby or Play Books link").assertIsDisplayed()
+        compose.onNodeWithTag("addBookLink").performTextReplacement("https://www.amazon.com/dp/B00B7NPRY8/")
+        compose.onNodeWithTag("addBookConfirm").performClick()
+        compose.waitUntil(5000) { store.data.value.books.isNotEmpty() }
+        assertEquals(
+            Book(BookApp.KINDLE, "B00B7NPRY8", "Dune", uri = Links.kindleUri("B00B7NPRY8"), reading = true),
+            store.data.value.books.single(),
+        )
+        // The new book is pre-selected.
         compose.onNodeWithTag("useAction").performClick()
         compose.onNodeWithText("Action: Dune").assertIsDisplayed()
     }

@@ -1,6 +1,8 @@
 package io.github.rmdodhia.gesturelauncher.data
 
 import io.github.rmdodhia.gesturelauncher.core.AppData
+import io.github.rmdodhia.gesturelauncher.core.Book
+import io.github.rmdodhia.gesturelauncher.core.BookApp
 import io.github.rmdodhia.gesturelauncher.core.Gesture
 import io.github.rmdodhia.gesturelauncher.core.Settings
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,36 @@ class Store(private val file: File) {
 
     suspend fun replaceAll(d: AppData) = update { d }
 
+    /**
+     * Replaces the synced books of [app] with [fresh]. Books the user added by hand are kept; if a synced
+     * book has the same key as a hand-added one, the synced details win but it stays on the shelf when a
+     * later sync no longer returns it.
+     */
+    suspend fun syncBooks(app: BookApp, fresh: List<Book>) = update { d ->
+        val incoming = fresh.filter { it.app == app }.map { it.copy(synced = true) }.distinctBy { it.key }
+        val incomingKeys = incoming.map { it.key }.toSet()
+        val manual = d.books.filter { it.app == app && !it.synced && it.key !in incomingKeys }
+        val handAddedKeys = d.books.filter { it.app == app && !it.synced }.map { it.key }.toSet()
+        val merged = incoming.map { if (it.key in handAddedKeys) it.copy(synced = false) else it }
+        d.copy(books = d.books.filter { it.app != app } + merged + manual)
+    }
+
+    /** Adds [book] by hand. If it's already on the shelf, only a missing author is filled in. */
+    suspend fun addBook(book: Book) = update { d ->
+        val existing = d.books.firstOrNull { it.key == book.key }
+        if (existing == null) {
+            d.copy(books = d.books + book.copy(synced = false))
+        } else {
+            d.copy(books = d.books.map { if (it.key == book.key) it.copy(author = it.author ?: book.author) else it })
+        }
+    }
+
+    suspend fun setReading(key: String, reading: Boolean) = update { d ->
+        d.copy(books = d.books.map { if (it.key == key) it.copy(reading = reading) else it })
+    }
+
+    suspend fun removeBook(key: String) = update { d -> d.copy(books = d.books.filterNot { it.key == key }) }
+
     fun export(): String = encode(_data.value)
 
     private fun write(d: AppData) {
@@ -87,7 +119,7 @@ class Store(private val file: File) {
             val d = AppJson.decodeFromString(AppData.serializer(), s)
             val ids = d.gestures.map { it.id }
             require(ids.size == ids.toSet().size) { "Duplicate gesture ids" }
-            return d
+            return d.copy(books = d.books.distinctBy { it.key })
         }
     }
 }

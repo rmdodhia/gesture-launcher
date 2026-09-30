@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.compose.material.icons)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.play.services.auth)
     if (homeSdk.isNotEmpty()) {
         implementation("com.google.android.gms:play-services-home:$homeSdk")
         implementation("com.google.android.gms:play-services-home-types:$homeSdk")

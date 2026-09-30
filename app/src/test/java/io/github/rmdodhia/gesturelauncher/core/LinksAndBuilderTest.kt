@@ -25,6 +25,41 @@ class LinksAndBuilderTest {
     }
 
     @Test
+    fun bookFromActions() {
+        // Kindle for Samsung (Galaxy Store) shares with a different package name.
+        val kindle = Links.actionFromShare("Dune https://read.amazon.com/kp/kshare?asin=B00B7NPRY8&id=x", "Dune", Links.KINDLE_SAMSUNG_PACKAGE)!!
+        val kb = Links.bookFrom(kindle)!!
+        assertEquals(Book(BookApp.KINDLE, "B00B7NPRY8", "Dune", uri = "kindle://book?action=open&asin=B00B7NPRY8"), kb)
+        assertEquals(OpenUri(kb.uri, Links.KINDLE_PACKAGE, "Dune"), Links.actionFor(kb))
+
+        val play = Links.bookFrom(OpenUri("https://play.google.com/store/books/details?id=XyZ123abc", Links.PLAY_BOOKS_PACKAGE, "Emma"))!!
+        assertEquals(BookApp.PLAY_BOOKS, play.app)
+        assertEquals("XyZ123abc", play.id)
+        assertEquals("https://play.google.com/books/reader?id=XyZ123abc", play.uri)
+
+        val libbyUrl = "https://share.libbyapp.com/title/123456"
+        val libby = Links.bookFrom(Links.actionFromShare(libbyUrl, "Circe", null)!!)!!
+        assertEquals(Book(BookApp.LIBBY, "123456", "Circe", uri = libbyUrl), libby)
+        assertEquals(Links.LIBBY_PACKAGE, Links.actionFor(libby).packageName)
+
+        // Share links naming the library are rewritten to the in-app title page (share.libbyapp.com opens the browser).
+        val shared = Links.actionFromShare("Circe on Libby https://share.libbyapp.com/title/123456#library-nypl", null, null)!!
+        assertEquals("https://libbyapp.com/library/nypl/everything/page-1/123456", shared.uri)
+        assertEquals(libby.key, Links.bookFrom(shared)!!.key)
+
+        assertNull(Links.bookFrom(OpenUri("https://example.com", null, "x")))
+        // Short Amazon link: no ASIN, so it's not treated as a book.
+        assertNull(Links.bookFrom(Links.actionFromShare("https://a.co/d/abc123", null, Links.KINDLE_PACKAGE)!!))
+    }
+
+    @Test
+    fun equivalentPackagesCoverBothKindles() {
+        assertEquals(listOf(Links.KINDLE_PACKAGE, Links.KINDLE_SAMSUNG_PACKAGE), Links.equivalentPackages(Links.KINDLE_PACKAGE))
+        assertEquals(listOf(Links.KINDLE_SAMSUNG_PACKAGE, Links.KINDLE_PACKAGE), Links.equivalentPackages(Links.KINDLE_SAMSUNG_PACKAGE))
+        assertEquals(listOf("com.x"), Links.equivalentPackages("com.x"))
+    }
+
+    @Test
     fun shareParsing() {
         val kindle = Links.actionFromShare("Check out Dune https://www.amazon.com/dp/B00B7NPRY8.", null, null)!!
         assertEquals("kindle://book?action=open&asin=B00B7NPRY8", kindle.uri)

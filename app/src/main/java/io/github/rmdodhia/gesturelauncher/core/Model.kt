@@ -88,8 +88,27 @@ data class Settings(
 }
 
 @Serializable
+enum class BookApp(val label: String) { KINDLE("Kindle"), LIBBY("Libby"), PLAY_BOOKS("Play Books") }
+
+/** A book on the unified shelf. [id] is the ASIN, Play Books volume ID, or Libby title ID (else the link). */
+@Serializable
+data class Book(
+    val app: BookApp,
+    val id: String,
+    val title: String,
+    val author: String? = null,
+    val uri: String,
+    val reading: Boolean = false,
+    /** True if it came from an automatic sync (replaced on the next sync); false if the user added it. */
+    val synced: Boolean = false,
+) {
+    val key: String get() = "${app.name}:$id"
+}
+
+@Serializable
 data class AppData(
     val version: Int = 1,
     val gestures: List<Gesture> = emptyList(),
     val settings: Settings = Settings(),
+    val books: List<Book> = emptyList(),
 )

@@ -11,8 +11,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -37,7 +39,10 @@ import io.github.rmdodhia.gesturelauncher.home.HOME_SDK_MISSING
 import io.github.rmdodhia.gesturelauncher.home.HomeGateway
 import io.github.rmdodhia.gesturelauncher.home.UnavailableHome
 import io.github.rmdodhia.gesturelauncher.AppInfo
+import io.github.rmdodhia.gesturelauncher.books.BookSource
+import io.github.rmdodhia.gesturelauncher.books.Library
 import io.github.rmdodhia.gesturelauncher.core.Gesture
+import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
 import io.github.rmdodhia.gesturelauncher.data.Store
@@ -63,6 +68,7 @@ fun GestureLauncherApp(
     runner: ActionRunner,
     home: HomeGateway = UnavailableHome(HOME_SDK_MISSING),
     loadApps: suspend () -> List<AppInfo>,
+    bookSources: List<BookSource> = emptyList(),
     incoming: Incoming?,
     onIncomingHandled: () -> Unit,
     startupMessage: String? = null,
@@ -74,6 +80,7 @@ fun GestureLauncherApp(
     val scope = rememberCoroutineScope()
     var crash by remember { mutableStateOf(crashReport) }
     val context = LocalContext.current
+    val library = remember(store, bookSources) { Library(store, bookSources) }
 
     fun showMessage(msg: String) {
         scope.launch { snackbar.showSnackbar(msg) }
@@ -96,10 +103,27 @@ fun GestureLauncherApp(
     LaunchedEffect(incoming) {
         when (incoming) {
             null -> return@LaunchedEffect
-            is Incoming.SharedLink -> screen = Screen.Edit(
-                Gesture(UUID.randomUUID().toString(), incoming.action.label, emptyList(), incoming.action),
-                isNew = true,
-            )
+            is Incoming.SharedLink -> {
+                val action = incoming.action
+                val newGesture = Screen.Edit(Gesture(UUID.randomUUID().toString(), action.label, emptyList(), action), isNew = true)
+                val book = Links.bookFrom(action)
+                if (book == null) {
+                    screen = newGesture
+                } else {
+                    // Books go on the shelf (Choose action → Book); offer a gesture straight away too.
+                    persist("add shared book") {
+                        store.addBook(book)
+                        scope.launch {
+                            val r = snackbar.showSnackbar(
+                                "Added \"${book.title}\" to Books",
+                                actionLabel = "Make gesture",
+                                duration = SnackbarDuration.Long,
+                            )
+                            if (r == SnackbarResult.ActionPerformed && screen !is Screen.Edit) screen = newGesture
+                        }
+                    }
+                }
+            }
             is Incoming.SharedWithoutLink -> showMessage("No link found in the shared text.")
             // Don't throw away an open editor; only leave the list screen.
             Incoming.OpenCanvas -> if (screen == Screen.List) screen = Screen.Draw
@@ -128,6 +152,7 @@ fun GestureLauncherApp(
                     runner = runner,
                     home = home,
                     loadApps = loadApps,
+                    library = library,
                     onSave = { g -> persist("save", { screen = Screen.List }) { store.upsertGesture(g) } },
                     onDelete = { g -> persist("delete", { screen = Screen.List }) { store.deleteGesture(g.id) } },
                     onClose = { screen = Screen.List },

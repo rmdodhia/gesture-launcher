@@ -9,6 +9,7 @@ import androidx.core.net.toUri
 import io.github.rmdodhia.gesturelauncher.core.Action
 import io.github.rmdodhia.gesturelauncher.core.HomeControl
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
+import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
 import io.github.rmdodhia.gesturelauncher.home.HomeGateway
@@ -40,29 +41,36 @@ class AndroidActionRunner(private val context: Context, private val home: () -> 
         return null
     }
 
-    /** Tries the link in the chosen app, then any app, then just opens the chosen app. */
+    /**
+     * Tries the link in the chosen app (or its equivalents). If that app is installed but can't handle the
+     * link, opens the app itself (the user picked it); otherwise lets any app (e.g. the browser) open the link.
+     */
     private fun openUri(a: OpenUri): String? {
         if (a.uri.isBlank()) return "No link set for \"${a.label}\"."
-        val base = Intent(Intent.ACTION_VIEW, a.uri.trim().toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val attempts = buildList {
-            if (a.packageName != null) add(Intent(base).setPackage(a.packageName))
-            add(base)
+        var uri = a.uri.trim()
+        // Gestures saved before v0.2 used the Play Store page; open the reader instead.
+        if (a.packageName == Links.PLAY_BOOKS_PACKAGE && uri.contains("/store/books/details")) {
+            Links.extractPlayBooksId(uri)?.let { uri = Links.playBooksUri(it) }
         }
-        for (intent in attempts) {
-            try {
-                context.startActivity(intent)
-                return null
-            } catch (_: ActivityNotFoundException) {
-                // try next
-            }
+        val base = Intent(Intent.ACTION_VIEW, uri.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val packages = a.packageName?.let { Links.equivalentPackages(it) }.orEmpty()
+        for (intent in packages.map { Intent(base).setPackage(it) }) {
+            if (tryStart(intent)) return null
         }
-        if (a.packageName != null) {
-            context.packageManager.getLaunchIntentForPackage(a.packageName)?.let {
+        for (pkg in packages) {
+            context.packageManager.getLaunchIntentForPackage(pkg)?.let {
                 context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                return "Link not supported; opened the app instead."
+                return "The app couldn't open this link directly, so it was opened instead."
             }
         }
-        return "No app can open this link."
+        return if (tryStart(base)) null else "No app can open this link."
+    }
+
+    private fun tryStart(intent: Intent): Boolean = try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
     }
 }
 

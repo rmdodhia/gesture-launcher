@@ -63,13 +63,13 @@ Sealed `Action` with an executor per type; each can be tested from the binding s
 | Action | Implementation | Risk |
 |---|---|---|
 | Open app | `PackageManager.getLaunchIntentForPackage`; picker lists launchable apps. Requires `<queries>` with `MAIN/LAUNCHER` intent in manifest (Android 11+ package visibility) | Low |
-| Open Kindle book | Unofficial deep link `kindle://book?action=open&asin=<ASIN>`; fallback: open Kindle app | Medium — undocumented, verify on device |
-| Open Play Books book | `https://play.google.com/store/books/details?id=<volumeId>` targeted at `com.google.android.apps.books`, or Play Books share link | Medium — verify it opens reader vs. store page |
-| Open Libby book | `libbyapp.com` links (e.g. from Libby's share function) targeted at `com.overdrive.mobile.android.libby`; fallback: open Libby | High — loaned-title deep links may only open the shelf |
+| Open Kindle book | Unofficial deep link `kindle://book?action=open&asin=<ASIN>`, tried in `com.amazon.kindle` then `com.amazon.kindlefs` (Galaxy Store build); fallback: open Kindle app | Medium — undocumented, verify on device |
+| Open Play Books book | `https://play.google.com/books/reader?id=<volumeId>` targeted at `com.google.android.apps.books` (resolves to its ReadingActivity; old `/store/books/details` links are rewritten at run time) | Low |
+| Open Libby book | `libbyapp.com/library/<lib>/everything/page-1/<titleId>` (rewritten from `share.libbyapp.com/title/<id>#library-<lib>`) targeted at `com.overdrive.mobile.android.libby`; fallback: open Libby | Medium — opens the title page, not the reader |
 | Generic intent/URL | User pastes any URI (catch-all for book links that work) | Low |
 | Google Home device (M4) | Home APIs: on/off, brightness (Dimmable/On-Off/Color Temp lights, plugs) | High — setup overhead; see below |
 
-Book picker UX: v1 = user pastes an ASIN / volume ID / share link. "Share to Gesture Launcher" (receive `ACTION_SEND` from Kindle/Play Books/Libby share sheets) to capture links automatically.
+Book picker UX (v0.2): one **Book** tab lists `AppData.books` from all three apps (Reading now / Library, search), so the user never picks the app. Play Books syncs automatically through the official Books API (`mylibrary/bookshelves/3` Reading now + `/7` My eBooks, scope `auth/books`, via `Identity.getAuthorizationClient`). Kindle and Libby books are added by sharing into the app (`ACTION_SEND`) or pasting a link. Automatic Kindle/Libby listing was rejected: there's no public API, Amazon's terms forbid scraping, and Libby's private API explicitly bans third-party clients and threatens suspension.
 
 ### Google Home integration (M4)
 

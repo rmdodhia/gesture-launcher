@@ -1,6 +1,8 @@
 package io.github.rmdodhia.gesturelauncher
 
 import android.app.Application
+import io.github.rmdodhia.gesturelauncher.books.BookSource
+import io.github.rmdodhia.gesturelauncher.books.PlayBooksSource
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
 import io.github.rmdodhia.gesturelauncher.data.Store
 import io.github.rmdodhia.gesturelauncher.home.HomeGateway
@@ -23,6 +25,9 @@ class GestureApp : Application() {
             UnavailableHome("Google Home failed to start: ${e.message ?: e::class.simpleName}")
         }
     }
+
+    /** Created on first use; the Play Books sync only runs when the user opens the Book picker. */
+    val bookSources: List<BookSource> by lazy { listOf(PlayBooksSource(this)) }
 
     /** Set if saved data couldn't be loaded; shown once by the UI. */
     var startupMessage: String? = null

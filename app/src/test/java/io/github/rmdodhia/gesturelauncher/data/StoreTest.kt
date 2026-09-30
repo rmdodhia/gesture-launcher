@@ -1,6 +1,8 @@
 package io.github.rmdodhia.gesturelauncher.data
 
 import io.github.rmdodhia.gesturelauncher.core.AppData
+import io.github.rmdodhia.gesturelauncher.core.Book
+import io.github.rmdodhia.gesturelauncher.core.BookApp
 import io.github.rmdodhia.gesturelauncher.core.Gesture
 import io.github.rmdodhia.gesturelauncher.core.GestureSample
 import io.github.rmdodhia.gesturelauncher.core.HomeCommand
@@ -60,6 +62,42 @@ class StoreTest {
         val backups = tmp.root.listFiles()!!.filter { it.name.startsWith("g.json.corrupt-") }
         assertEquals(1, backups.size)
         assertEquals("{ this is not json", backups[0].readText())
+    }
+
+    @Test
+    fun bookSyncKeepsHandAddedBooksAndOtherApps() = runTest {
+        val f = File(tmp.root, "g.json")
+        val s = Store(f)
+        fun play(id: String, reading: Boolean = false) = Book(BookApp.PLAY_BOOKS, id, "P$id", uri = "u$id", reading = reading)
+        val kindle = Book(BookApp.KINDLE, "B000000001", "K", uri = "kindle://x")
+        s.addBook(kindle)
+        s.addBook(play("manual").copy(title = "Mine"))
+        s.syncBooks(BookApp.PLAY_BOOKS, listOf(play("a", reading = true), play("b"), play("b")))
+        assertEquals(setOf("KINDLE:B000000001", "PLAY_BOOKS:manual", "PLAY_BOOKS:a", "PLAY_BOOKS:b"), s.data.value.books.map { it.key }.toSet())
+        assertTrue(s.data.value.books.single { it.id == "a" }.synced)
+
+        // Next sync: "a" gone, "manual" now returned by the service → synced details, but stays hand-added.
+        s.syncBooks(BookApp.PLAY_BOOKS, listOf(play("b"), play("manual")))
+        val books = Store(f).also { it.load() }.data.value.books
+        assertEquals(setOf("KINDLE:B000000001", "PLAY_BOOKS:b", "PLAY_BOOKS:manual"), books.map { it.key }.toSet())
+        assertEquals(false, books.single { it.id == "manual" }.synced)
+
+        s.syncBooks(BookApp.PLAY_BOOKS, emptyList())
+        assertEquals(setOf("KINDLE:B000000001", "PLAY_BOOKS:manual"), s.data.value.books.map { it.key }.toSet())
+
+        // Adding an existing book again doesn't duplicate or overwrite it.
+        s.addBook(kindle.copy(title = "Other", author = "A"))
+        assertEquals(Book(BookApp.KINDLE, "B000000001", "K", "A", "kindle://x"), s.data.value.books.single { it.app == BookApp.KINDLE })
+        s.setReading(kindle.key, true)
+        assertTrue(s.data.value.books.single { it.app == BookApp.KINDLE }.reading)
+        s.removeBook(kindle.key)
+        assertTrue(s.data.value.books.none { it.app == BookApp.KINDLE })
+    }
+
+    @Test
+    fun olderFilesWithoutBooksStillLoad() {
+        val d = Store.decode("""{"version":1,"gestures":[],"settings":{}}""")
+        assertTrue(d.books.isEmpty())
     }
 
     @Test

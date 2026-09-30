@@ -35,12 +35,11 @@ Command line equivalents (from the project root):
 2. Name it, then draw it **3–5 times** in the box, the way you'll normally do it. Each drawing shows up as a thumbnail with a summary (e.g. "3-finger tap" or "1 finger · 2 strokes"). Tap ✕ to drop a bad one. All samples must be the same kind of gesture (e.g. all 3-finger taps). If one isn't, it's rejected with an explanation.
 3. Tap **Choose** to pick an action:
    - **App** opens any installed app.
+   - **Book** shows one list of your books from Kindle, Libby and Play Books, split into *Reading now* and *Library*, with search. Pick a book; the gesture opens it in whichever app it belongs to. See [Books](#books) for how books get onto the list.
    - **Google Home** switches a light/plug on, off, toggles it, or sets brightness (needs [Google Home setup](#google-home-setup)).
-   - **Kindle book** takes an ASIN (the `B0…` ID in the book's Amazon URL) or a pasted Amazon link, and opens it with `kindle://book?action=open&asin=…`.
-   - **Play Books** takes a volume ID or a Play Store book link.
-   - **Libby / link** takes any link, optionally forced to open in Libby, Kindle or Play Books.
+   - **Link** takes any link, optionally forced to open in Libby, Kindle or Play Books.
    - Use **Test** to check that it opens the right thing, then tap **Use this action** and **Save**.
-4. Shortcut: in Libby, Kindle, Play Books or a browser, use **Share → Gesture Launcher** (labelled *Create gesture*). A new gesture opens with the link already filled in.
+4. Shortcut: in any app, **Share → Gesture Launcher** (labelled *Create gesture*). Books (Kindle, Libby, Play Books links) are added to your book list, and a **Make gesture** button appears. Any other link opens a new gesture with the link already filled in.
 5. Quick access: add the **Draw gesture** tile to Quick Settings (pull down twice → ✎ edit → drag the tile in).
 
 ### What counts as the same gesture
@@ -56,6 +55,17 @@ Command line equivalents (from the project root):
 - **Strictness** (default 80%): raise it if random scribbles trigger actions; lower it if your gestures often come back "Not recognized".
 - **End-of-gesture pause**: see above.
 - **Show match scores**: shows the score and the closest gesture after each attempt. Useful for tuning.
+
+## Books
+
+The Book list combines three sources:
+
+- **Play Books: automatic.** The first time you open **Book**, tap **Connect** next to *Play Books* and allow access. Your *Reading now* shelf and *My books* are then listed and refreshed whenever you open the list (at most every 10 min; **Refresh** forces it). This uses Google's official Books API, which needs a one-time switch: in the same Google Cloud project as the [Google Home setup](#google-home-setup), open <https://console.cloud.google.com/apis/library/books.googleapis.com> and click **Enable**. If you skip this, the app says so. It uses the same OAuth clients (package name + SHA-1) as Google Home.
+- **Kindle and Libby: share them in.** In Kindle or Libby, open a book's page and tap **Share → Gesture Launcher**. You can also tap **Add by link** in the list and paste an Amazon/Kindle link, an ASIN, or a Libby link. New books go under *Reading now*; use ⋮ on a book to move it or remove it.
+  - Kindle opens the book with `kindle://book?action=open&asin=…`. The Galaxy Store build of Kindle (`com.amazon.kindlefs`) and the Play Store build both work.
+  - Libby share links (`share.libbyapp.com/title/…#library-…`) are rewritten to the title page inside Libby (`libbyapp.com/library/<library>/everything/page-1/<id>`), where you tap *Open book*.
+
+Why Kindle and Libby aren't listed automatically: neither has a public API. Amazon's terms forbid automated access to your Kindle library, and Libby's private API explicitly forbids other clients and threatens account suspension. Sharing a book in takes a few seconds and keeps your accounts safe.
 
 ## Google Home setup
 
@@ -87,7 +97,7 @@ Notes:
 
 ## Known limitations
 
-- The Kindle `kindle://` link is undocumented. If it stops working, the app falls back to opening Kindle. Libby links may only open your shelf, not the specific book. Test each with **Test**.
+- The Kindle `kindle://` link is undocumented. If it stops working, the app falls back to opening Kindle. Libby opens the book's page rather than straight into the reader. A Libby link without the library part opens the Libby app. Test each with **Test**.
 - Samsung/One UI system gestures (edge swipes, Edge panel handle, navigation-bar swipes) can take touches that start at the very edge of the screen. The drawing area is inset from those edges for that reason.
 - On synthetic test data, about 13% of random scribbles are accepted as some gesture at the default strictness. Wrong-gesture matches were 0 of 640. Raise strictness if that bothers you.
 

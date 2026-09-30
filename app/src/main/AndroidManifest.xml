@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Google Books API (Play Books shelf sync) and Google Home cloud calls. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Needed (Android 11+) to list and launch other apps. -->
     <queries>
         <intent>

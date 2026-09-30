@@ -42,7 +42,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.rmdodhia.gesturelauncher.ActionRunner
 import io.github.rmdodhia.gesturelauncher.AppInfo
+import io.github.rmdodhia.gesturelauncher.books.Library
 import io.github.rmdodhia.gesturelauncher.core.Action
+import io.github.rmdodhia.gesturelauncher.core.Book
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
@@ -52,7 +54,7 @@ import io.github.rmdodhia.gesturelauncher.home.HomeGateway
 import kotlinx.coroutines.launch
 
 private enum class ActionType(val title: String) {
-    APP("App"), HOME("Google Home"), KINDLE("Kindle book"), PLAY("Play Books"), LINK("Libby / link"),
+    APP("App"), BOOK("Book"), HOME("Google Home"), LINK("Link"),
 }
 
 private val linkTargets = listOf(
@@ -69,30 +71,22 @@ fun ActionPicker(
     runner: ActionRunner,
     home: HomeGateway,
     loadApps: suspend () -> List<AppInfo>,
+    books: List<Book>,
+    library: Library,
     onPick: (Action) -> Unit,
     onCancel: () -> Unit,
 ) {
     val initialType = when {
         current is LaunchApp -> ActionType.APP
         current is HomeControl -> ActionType.HOME
-        current is OpenUri && current.uri.startsWith("kindle://") -> ActionType.KINDLE
-        current is OpenUri && current.packageName == Links.PLAY_BOOKS_PACKAGE -> ActionType.PLAY
+        current is OpenUri && Links.bookFrom(current) != null -> ActionType.BOOK
         current is OpenUri -> ActionType.LINK
         else -> ActionType.APP
     }
     var type by remember { mutableStateOf(initialType) }
     val openUri = current as? OpenUri
     var title by remember { mutableStateOf(openUri?.label ?: "") }
-    var input by remember {
-        mutableStateOf(
-            when (initialType) {
-                ActionType.KINDLE -> openUri?.uri?.let { Links.extractAsin(it) } ?: ""
-                ActionType.PLAY -> openUri?.uri?.let { Links.extractPlayBooksId(it) } ?: ""
-                ActionType.LINK -> openUri?.uri ?: ""
-                ActionType.APP, ActionType.HOME -> ""
-            },
-        )
-    }
+    var input by remember { mutableStateOf(if (initialType == ActionType.LINK) openUri?.uri.orEmpty() else "") }
     var linkPackage by remember { mutableStateOf(openUri?.packageName) }
     var testResult by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -137,51 +131,38 @@ fun ActionPicker(
                 HomePanel(home, runner, current as? HomeControl, onPick)
                 return@Column
             }
+            if (type == ActionType.BOOK) {
+                BooksPanel(books, library, runner, openUri, onPick)
+                return@Column
+            }
 
-            val action: OpenUri? = when (type) {
-                ActionType.KINDLE -> Links.extractAsin(input)?.let {
-                    OpenUri(Links.kindleUri(it), Links.KINDLE_PACKAGE, title.ifBlank { "Kindle book $it" })
-                }
-                ActionType.PLAY -> Links.extractPlayBooksId(input)?.let {
-                    OpenUri(Links.playBooksUri(it), Links.PLAY_BOOKS_PACKAGE, title.ifBlank { "Play Books $it" })
-                }
-                else -> input.trim().takeIf { it.contains("://") }?.let {
-                    OpenUri(it, linkPackage, title.ifBlank { Links.hostOf(it) ?: it })
-                }
+            val action: OpenUri? = input.trim().takeIf { it.contains("://") }?.let {
+                OpenUri(it, linkPackage, title.ifBlank { Links.hostOf(it) ?: it })
             }
             Column(
                 Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedTextField(
-                    title, { title = it }, label = { Text("Label (e.g. book title)") },
+                    title, { title = it }, label = { Text("Label") },
                     singleLine = true, modifier = Modifier.fillMaxWidth().testTag("actionLabel"),
                 )
-                val (fieldLabel, help) = when (type) {
-                    ActionType.KINDLE -> "ASIN or Amazon link" to
-                        "The 10-character ID from the book's Amazon page URL (starts with B0…). The book must be in your Kindle library."
-                    ActionType.PLAY -> "Volume ID or Play Books link" to
-                        "Share the book from Play Books, or paste its Google Play URL (the part after id=)."
-                    else -> "Link (https://… or app://…)" to
-                        "Tip: in Libby (or any app) use Share → Gesture Launcher to create a gesture from a link automatically."
-                }
+                val help = "Tip: in any app use Share → Gesture Launcher to create a gesture from a link automatically."
                 OutlinedTextField(
-                    input, { input = it; testResult = null }, label = { Text(fieldLabel) },
+                    input, { input = it; testResult = null }, label = { Text("Link (https://… or app://…)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth().testTag("actionInput"),
                     isError = input.isNotBlank() && action == null,
                     supportingText = {
                         Text(if (input.isNotBlank() && action == null) "Not recognized — check the value" else help)
                     },
                 )
-                if (type == ActionType.LINK) {
-                    Text("Open with", style = MaterialTheme.typography.labelLarge)
-                    Row(
-                        Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        linkTargets.forEach { (pkg, name) ->
-                            FilterChip(selected = linkPackage == pkg, onClick = { linkPackage = pkg }, label = { Text(name) })
-                        }
+                Text("Open with", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    linkTargets.forEach { (pkg, name) ->
+                        FilterChip(selected = linkPackage == pkg, onClick = { linkPackage = pkg }, label = { Text(name) })
                     }
                 }
                 if (action != null) {
