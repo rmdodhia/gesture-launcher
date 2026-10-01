@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -38,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,6 +69,7 @@ internal fun BooksPanel(
     val states = remember { mutableStateMapOf<BookApp, SyncState>() }
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf(current?.let { Links.bookFrom(it) }) }
+    var helping by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
@@ -95,14 +99,8 @@ internal fun BooksPanel(
                     sync(source, interactive)
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Kindle & Libby: open the book's page, tap Share → Gesture Launcher.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { adding = true }, modifier = Modifier.testTag("addBook")) { Text("Add by link") }
+            OutlinedButton(onClick = { helping = true }, modifier = Modifier.fillMaxWidth().testTag("howToAdd")) {
+                Text("How to add Kindle & Libby books")
             }
             OutlinedTextField(
                 query, { query = it }, label = { Text("Search books") }, singleLine = true,
@@ -120,7 +118,7 @@ internal fun BooksPanel(
             if (books.isEmpty()) {
                 item {
                     Text(
-                        "No books yet. Connect Play Books above, or share a book from Kindle or Libby.",
+                        "No books yet. Connect Play Books above, or tap \"How to add Kindle & Libby books\".",
                         modifier = Modifier.padding(16.dp),
                     )
                 }
@@ -154,6 +152,12 @@ internal fun BooksPanel(
         selected?.let { book -> SelectedBar(book, runner, onPick) }
     }
 
+    if (helping) {
+        AddBookHelpDialog(
+            onDismiss = { helping = false },
+            onPasteLink = { helping = false; adding = true },
+        )
+    }
     if (adding) {
         AddBookDialog(
             onDismiss = { adding = false },
@@ -259,6 +263,70 @@ private fun SelectedBar(book: Book, runner: ActionRunner, onPick: (Action) -> Un
             result?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("testResult")) }
         }
     }
+}
+
+/** Step-by-step instructions for sharing a book in from Kindle or Libby, which have no public API. */
+@Composable
+private fun AddBookHelpDialog(onDismiss: () -> Unit, onPasteLink: () -> Unit) {
+    val context = LocalContext.current
+    fun launchIntent(packages: List<String>) =
+        packages.firstNotNullOfOrNull { context.packageManager.getLaunchIntentForPackage(it) }
+
+    @Composable
+    fun AppSteps(app: String, packages: List<String>, steps: List<String>) {
+        Text(app, style = MaterialTheme.typography.titleSmall)
+        steps.forEachIndexed { i, step -> Text("${i + 1}. $step", style = MaterialTheme.typography.bodyMedium) }
+        val intent = launchIntent(packages)
+        if (intent != null) {
+            OutlinedButton(onClick = {
+                try {
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    ErrorLog.record("open $app", e)
+                }
+            }, modifier = Modifier.testTag("open$app")) { Text("Open $app") }
+        } else {
+            Text("$app isn't installed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Kindle & Libby books") },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).testTag("howToAddDialog"),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "Kindle and Libby don't let other apps read your library, so you send each book here once.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                AppSteps(
+                    "Kindle", Links.KINDLE_PACKAGES,
+                    listOf(
+                        "In your Kindle library, tap ⋮ on the book (or long-press its cover).",
+                        "Tap \"Recommend this book\" (or \"Share\").",
+                        "Choose Gesture Launcher.",
+                    ),
+                )
+                AppSteps(
+                    "Libby", listOf(Links.LIBBY_PACKAGE),
+                    listOf(
+                        "On your Shelf, tap the book's cover, then open its title page.",
+                        "Tap Share.",
+                        "Choose Gesture Launcher.",
+                    ),
+                )
+                Text(
+                    "The book then appears in this list under Reading now, and the app offers to make a gesture for it.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                TextButton(onClick = onPasteLink, modifier = Modifier.testTag("addBook")) { Text("Have a link instead? Paste it") }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
 }
 
 /** Parses a pasted Kindle/Amazon, Libby or Play Books link (or bare ASIN) into a [Book]. */
