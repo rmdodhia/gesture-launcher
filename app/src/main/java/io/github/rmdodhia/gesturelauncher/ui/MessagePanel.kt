@@ -2,7 +2,9 @@ package io.github.rmdodhia.gesturelauncher.ui
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +37,20 @@ import io.github.rmdodhia.gesturelauncher.core.Action
 import io.github.rmdodhia.gesturelauncher.core.SendMessage
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
 import kotlinx.coroutines.launch
+
+/**
+ * Picking a phone number can be offered by unrelated apps (e.g. file managers), and with several contacts
+ * apps Android asks every time. Prefer a real contacts app, the preinstalled one first.
+ */
+internal fun contactPickerIntent(context: Context): Intent {
+    val pick = Intent(Intent.ACTION_PICK, Phone.CONTENT_URI)
+    val pm = context.packageManager
+    val contactsApps = pm.queryIntentActivities(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CONTACTS), 0)
+        .map { it.activityInfo.packageName }.toSet()
+    val pickers = pm.queryIntentActivities(pick, 0).map { it.activityInfo }.filter { it.packageName in contactsApps }
+    val best = pickers.firstOrNull { it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0 } ?: pickers.firstOrNull()
+    return best?.let { Intent(pick).setClassName(it.packageName, it.name) } ?: pick
+}
 
 /**
  * "Message" tab: pick a recipient with the system contact picker (which grants access to just that one
@@ -76,7 +92,7 @@ internal fun MessagePanel(current: SendMessage?, runner: ActionRunner, onPick: (
         )
         Button(onClick = {
             try {
-                picker.launch(Intent(Intent.ACTION_PICK, Phone.CONTENT_URI))
+                picker.launch(contactPickerIntent(context))
             } catch (e: ActivityNotFoundException) {
                 ErrorLog.record("open contact picker", e)
                 message = "No contacts app found. Type the number below instead."
