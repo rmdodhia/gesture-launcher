@@ -9,6 +9,7 @@ import io.github.rmdodhia.gesturelauncher.core.HomeCommand
 import io.github.rmdodhia.gesturelauncher.core.HomeControl
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
+import io.github.rmdodhia.gesturelauncher.core.SendMessage
 import io.github.rmdodhia.gesturelauncher.core.Settings
 import io.github.rmdodhia.gesturelauncher.core.TouchPoint
 import io.github.rmdodhia.gesturelauncher.core.Track
@@ -38,17 +39,19 @@ class StoreTest {
         s.upsertGesture(g1)
         s.upsertGesture(g2)
         s.upsertGesture(g1.copy(name = "Circle 2"))
+        s.upsertGesture(g1.copy(id = "3", name = "Text", action = SendMessage("+15550100199", "Sam")))
         s.updateSettings(Settings(threshold = 0.7f, endTimeoutMs = 900, showDebug = true))
 
         val reloaded = Store(f)
         assertNull(reloaded.load())
-        assertEquals(listOf("Circle 2", "Book"), reloaded.data.value.gestures.map { it.name })
+        assertEquals(listOf("Circle 2", "Book", "Text"), reloaded.data.value.gestures.map { it.name })
         assertEquals(g2.action, reloaded.data.value.gestures[1].action)
+        assertEquals(SendMessage("+15550100199", "Sam", "Message Sam"), reloaded.data.value.gestures[2].action)
         assertEquals(900L, reloaded.data.value.settings.endTimeoutMs)
         assertTrue(!File(tmp.root, "g.json.tmp").exists())
 
         reloaded.deleteGesture("1")
-        assertEquals(listOf("2"), Store(f).also { it.load() }.data.value.gestures.map { it.id })
+        assertEquals(listOf("2", "3"), Store(f).also { it.load() }.data.value.gestures.map { it.id })
     }
 
     @Test

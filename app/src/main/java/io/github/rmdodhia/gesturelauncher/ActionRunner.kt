@@ -4,13 +4,16 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Telephony
 import androidx.core.net.toUri
 import io.github.rmdodhia.gesturelauncher.core.Action
 import io.github.rmdodhia.gesturelauncher.core.HomeControl
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
+import io.github.rmdodhia.gesturelauncher.core.SendMessage
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
 import io.github.rmdodhia.gesturelauncher.home.HomeGateway
 import kotlinx.coroutines.CancellationException
@@ -26,6 +29,7 @@ class AndroidActionRunner(private val context: Context, private val home: () -> 
             is LaunchApp -> launchApp(action.packageName, action.label)
             is OpenUri -> openUri(action)
             is HomeControl -> home().run(action)
+            is SendMessage -> sendMessage(action)
         }
     } catch (e: CancellationException) {
         throw e
@@ -64,6 +68,14 @@ class AndroidActionRunner(private val context: Context, private val home: () -> 
             }
         }
         return if (tryStart(base)) null else "No app can open this link."
+    }
+
+    /** Opens a new message to the number, preferring the default SMS app over a chooser. */
+    private fun sendMessage(a: SendMessage): String? {
+        if (a.number.isBlank()) return "No number set for \"${a.label}\"."
+        val base = Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", a.number, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        Telephony.Sms.getDefaultSmsPackage(context)?.let { if (tryStart(Intent(base).setPackage(it))) return null }
+        return if (tryStart(base)) null else "No messaging app is installed."
     }
 
     private fun tryStart(intent: Intent): Boolean = try {

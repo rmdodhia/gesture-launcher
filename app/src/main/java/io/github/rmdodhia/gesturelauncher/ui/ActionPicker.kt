@@ -49,12 +49,13 @@ import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
 import io.github.rmdodhia.gesturelauncher.core.HomeControl
+import io.github.rmdodhia.gesturelauncher.core.SendMessage
 import io.github.rmdodhia.gesturelauncher.data.ErrorLog
 import io.github.rmdodhia.gesturelauncher.home.HomeGateway
 import kotlinx.coroutines.launch
 
 private enum class ActionType(val title: String) {
-    APP("App"), BOOK("Book"), HOME("Google Home"), LINK("Link"),
+    APP("App"), BOOK("Book"), MESSAGE("Message"), HOME("Google Home"), LINK("Link"),
 }
 
 private val linkTargets = listOf(
@@ -79,6 +80,7 @@ fun ActionPicker(
     val initialType = when {
         current is LaunchApp -> ActionType.APP
         current is HomeControl -> ActionType.HOME
+        current is SendMessage -> ActionType.MESSAGE
         current is OpenUri && Links.bookFrom(current) != null -> ActionType.BOOK
         current is OpenUri -> ActionType.LINK
         else -> ActionType.APP
@@ -129,6 +131,10 @@ fun ActionPicker(
             }
             if (type == ActionType.HOME) {
                 HomePanel(home, runner, current as? HomeControl, onPick)
+                return@Column
+            }
+            if (type == ActionType.MESSAGE) {
+                MessagePanel(current as? SendMessage, runner, onPick)
                 return@Column
             }
             if (type == ActionType.BOOK) {

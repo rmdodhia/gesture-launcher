@@ -5,7 +5,7 @@
 An Android app that turns gestures into actions. Draw a shape, tap with several fingers, swipe, or tap a rhythm on a full-screen canvas, and the phone opens an app, opens a specific book in Kindle, Libby or Google Play Books, or switches/dims a Google Home light or plug. You record your own gestures; recognition runs on the device.
 
 - **Gestures:** single- and multi-stroke shapes, multi-finger taps and swipes, tap rhythms. Recognition uses a [$P point-cloud recognizer](https://depts.washington.edu/acelab/proj/dollar/pdollar.html) plus finger/stroke/tap-count checks, and refuses ambiguous matches.
-- **Actions:** open any app; open a book from one combined list (Play Books synced automatically, Kindle/Libby added via the share sheet); control Google Home devices, including ones linked from other brands' apps; open any link.
+- **Actions:** open any app; open a book from one combined list (Play Books synced automatically, Kindle/Libby added via the share sheet); start a text message to a chosen contact; control Google Home devices, including ones linked from other brands' apps; open any link.
 - **Quick access:** a Quick Settings tile opens the drawing canvas.
 - **Private:** gestures and your book list are stored only on the phone. The app talks to Google's APIs only if you connect Play Books or Google Home.
 
@@ -40,6 +40,7 @@ Command line equivalents (from the project root):
 3. Tap **Choose** to pick an action:
    - **App** opens any installed app.
    - **Book** shows one list of your books from Kindle, Libby and Play Books, split into *Reading now* and *Library*, with search. Pick a book; the gesture opens it in whichever app it belongs to. See [Books](#books) for how books get onto the list.
+   - **Message** opens your default messaging app (e.g. Google Messages or Samsung Messages) with a new message to someone. Tap **Choose contact** to pick them from your contacts, or type a name and number. The app only sees the contact you pick; it doesn't need access to your contacts.
    - **Google Home** switches a light/plug on, off, toggles it, or sets brightness (needs [Google Home setup](#google-home-setup)).
    - **Link** takes any link, optionally forced to open in Libby, Kindle or Play Books.
    - Use **Test** to check that it opens the right thing, then tap **Use this action** and **Save**.

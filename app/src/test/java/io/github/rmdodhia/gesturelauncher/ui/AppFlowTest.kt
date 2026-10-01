@@ -22,6 +22,7 @@ import io.github.rmdodhia.gesturelauncher.core.BookApp
 import io.github.rmdodhia.gesturelauncher.core.LaunchApp
 import io.github.rmdodhia.gesturelauncher.core.Links
 import io.github.rmdodhia.gesturelauncher.core.OpenUri
+import io.github.rmdodhia.gesturelauncher.core.SendMessage
 import io.github.rmdodhia.gesturelauncher.data.Store
 import io.github.rmdodhia.gesturelauncher.core.HomeCommand
 import io.github.rmdodhia.gesturelauncher.core.HomeControl
@@ -330,6 +331,32 @@ class AppFlowTest {
         drawShape("drawCanvas", *zigzag)
         compose.waitForIdle()
         assertEquals(listOf<Action>(HomeControl("lamp-1", "Desk lamp", HomeCommand.BRIGHTNESS, 50)), ran)
+    }
+
+    @Test
+    fun messageActionByTypedNumberRunsFromGesture() {
+        launch()
+        compose.onNodeWithTag("openGestures").performClick()
+        compose.onNodeWithTag("newGesture").performClick()
+        compose.onNodeWithTag("nameField").performTextInput("Text Sam")
+        repeat(3) { drawShape("recordCanvas", *zigzag) }
+        compose.onNodeWithTag("chooseAction").performClick()
+        compose.onNodeWithTag("type_MESSAGE").performClick()
+        compose.onNodeWithTag("pickContact").assertIsDisplayed()
+        compose.onNodeWithTag("messageName").performTextInput("Sam")
+        compose.onNodeWithTag("messageNumber").performTextInput("hello")
+        compose.onNodeWithText("Not a phone number").assertIsDisplayed()
+        compose.onNodeWithTag("messageNumber").performTextReplacement("+1 (555) 010-0199")
+        compose.onNodeWithTag("useAction").performClick()
+        compose.onNodeWithText("Action: Message Sam").assertIsDisplayed()
+        compose.onNodeWithTag("save").performClick()
+        compose.waitUntil(5000) { store.data.value.gestures.isNotEmpty() }
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
+
+        drawShape("drawCanvas", *zigzag)
+        compose.waitForIdle()
+        assertEquals(listOf<Action>(SendMessage("+1 (555) 010-0199", "Sam")), ran)
     }
 
     @Test

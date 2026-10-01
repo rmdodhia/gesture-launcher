@@ -41,6 +41,26 @@ data class OpenUri(
     override val label: String,
 ) : Action
 
+/** Opens the default messaging app with a new message to [number]. */
+@Serializable
+@SerialName("sms")
+data class SendMessage(
+    val number: String,
+    val name: String,
+    override val label: String = defaultLabel(name, number),
+) : Action {
+    companion object {
+        fun defaultLabel(name: String, number: String): String = "Message ${name.ifBlank { number }}"
+
+        /** Null unless [number] looks like a phone number (at least 3 digits; only dialable characters). */
+        fun from(name: String, number: String): SendMessage? {
+            val n = number.trim()
+            if (n.count { it.isDigit() } < 3 || n.any { !it.isDigit() && it !in "+-() .#*" }) return null
+            return SendMessage(n, name.trim())
+        }
+    }
+}
+
 enum class HomeCommand(val verb: String) { ON("on"), OFF("off"), TOGGLE("toggle"), BRIGHTNESS("brightness") }
 
 /** Controls a Google Home device (light, plug, …) via the Home APIs. [percent] is used for BRIGHTNESS. */
